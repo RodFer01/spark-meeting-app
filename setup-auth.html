@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Sync credentials</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', -apple-system, sans-serif; background: #F5F6F7;
+       display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+.card { background: white; border-radius: 16px; padding: 40px; width: 100%;
+        max-width: 420px; box-shadow: 0 4px 20px rgba(0,0,0,.12); text-align: center; }
+.logo { background: #0070f2; border-radius: 10px; width: 44px; height: 44px;
+        display: inline-flex; align-items: center; justify-content: center;
+        color: white; font-weight: 700; font-size: 14px; margin-bottom: 16px; }
+h2 { font-size: 20px; margin-bottom: 8px; }
+p  { font-size: 13px; color: #6A6D70; margin-bottom: 24px; }
+input { width: 100%; padding: 10px 14px; border: 1px solid #E1E2E6;
+        border-radius: 8px; font-size: 14px; font-family: inherit; margin-bottom: 12px; }
+input:focus { outline: none; border-color: #0070f2; }
+button { width: 100%; padding: 12px; background: #0070f2; color: white;
+         border: none; border-radius: 8px; font-size: 14px; cursor: pointer;
+         font-family: inherit; font-weight: 600; }
+button:hover { background: #0134BF; }
+button:disabled { opacity: .6; cursor: default; }
+.msg { padding: 10px 14px; border-radius: 8px; margin-top: 16px;
+       font-size: 13px; display: none; }
+.msg.ok  { background: #E8F5E9; color: #2E7D32; }
+.msg.err { background: #FFEBEE; color: #BB0000; }
+</style>
+</head>
+<body>
+<div class="card">
+  <a href="http://localhost:8766" style="display:inline-flex;align-items:center;gap:5px;background:rgba(0,112,242,.08);border:1px solid rgba(0,112,242,.2);color:#0070F2;font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px;text-decoration:none;margin-bottom:24px;">
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Portal
+  </a>
+  <div class="logo">SAP</div>
+  <h2>Sync credentials</h2>
+  <p>Enter your Spark Meeting password once to enable login in MR Dashboard and My Requests.</p>
+  <input type="email" id="email" placeholder="your.email@sap.com" autocomplete="email">
+  <input type="password" id="pw" placeholder="Spark Meeting password" autocomplete="current-password">
+  <button id="btn" onclick="sync()">Sync credentials</button>
+  <div class="msg" id="msg"></div>
+</div>
+<script>
+async function sync() {
+  const email = document.getElementById('email').value.trim().toLowerCase();
+  const pw    = document.getElementById('pw').value;
+  const btn   = document.getElementById('btn');
+  if (!email || !pw) { show('Fill in both fields.', 'err'); return; }
+
+  btn.textContent = 'Syncing…'; btn.disabled = true;
+  try {
+    // Compute hash exactly as Spark Meeting does
+    const buf  = await crypto.subtle.digest('SHA-256',
+                   new TextEncoder().encode(pw + 'spark_salt_2026'));
+    const hash = Array.from(new Uint8Array(buf))
+                      .map(b => b.toString(16).padStart(2,'0')).join('');
+
+    // Save to auth server (Spark Meeting backend on 8768)
+    const r = await fetch('/api/auth/register-hash', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ email, name: email.split('@')[0], pw_hash: hash })
+    });
+    if (!r.ok) { show('Server error: ' + await r.text(), 'err'); return; }
+
+    show('Done! You can now log in to MR Dashboard and My Requests with these credentials.', 'ok');
+  } catch(e) {
+    show('Error: ' + e.message, 'err');
+  } finally {
+    btn.textContent = 'Sync credentials'; btn.disabled = false;
+  }
+}
+
+function show(msg, type) {
+  const el = document.getElementById('msg');
+  el.textContent = msg;
+  el.className = 'msg ' + type;
+  el.style.display = 'block';
+}
+
+// Pre-fill email if already known
+document.addEventListener('DOMContentLoaded', () => {
+  const s = localStorage.getItem('spark_auth_session') || sessionStorage.getItem('spark_auth_session');
+  if (s) try { document.getElementById('email').value = JSON.parse(s).email || ''; } catch(e){}
+  document.getElementById('pw').focus();
+});
+
+// Enter key submits
+document.addEventListener('keydown', e => { if (e.key === 'Enter') sync(); });
+</script>
+</body>
+</html>

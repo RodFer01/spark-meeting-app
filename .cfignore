@@ -1,0 +1,8 @@
+.git
+.auth_cache.json
+start.sh
+data/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store

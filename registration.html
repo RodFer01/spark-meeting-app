@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Digital Discovery Expert Series — Registro</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: '72', 'SAP 72', Arial, sans-serif; background: #F0F2F5; color: #1D2D3E; min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* Header */
+    .site-header { background: #00144A; padding: 18px 40px; display: flex; align-items: center; gap: 20px; border-bottom: 3px solid #0070F2; }
+    .sap-logo { font-size: 1.8rem; font-weight: 900; letter-spacing: -1px; background: linear-gradient(135deg, #00B8FF 0%, #FFFFFF 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; min-width: 52px; }
+    .header-divider { width: 1px; height: 36px; background: rgba(255,255,255,.3); }
+    .header-meta h1 { font-size: 1rem; font-weight: 700; color: white; letter-spacing: .3px; }
+    .header-meta p { font-size: .75rem; color: rgba(255,255,255,.65); margin-top: 2px; }
+
+    /* Layout */
+    .page-wrapper { max-width: 700px; margin: 0 auto; padding: 32px 16px 60px; flex: 1; }
+    .page-intro { margin-bottom: 24px; }
+    .page-intro h2 { font-size: 1.35rem; font-weight: 700; color: #00144A; margin-bottom: 6px; }
+    .page-intro p { font-size: .88rem; color: #556B8D; }
+
+    /* Session banner */
+    .session-banner { background: #E8F4FF; border: 1px solid #89CAFF; border-left: 4px solid #0070F2; border-radius: 6px; padding: 14px 18px; margin-bottom: 28px; display: none; }
+    .session-banner.show { display: block; }
+    .session-banner .lbl { font-size: .7rem; font-weight: 700; text-transform: uppercase; color: #0070F2; letter-spacing: .8px; margin-bottom: 4px; }
+    .session-banner .s-name { font-size: .95rem; font-weight: 600; color: #00144A; }
+    .session-banner .s-date { font-size: .8rem; color: #556B8D; margin-top: 2px; }
+
+    /* Form card */
+    .form-card { background: white; border-radius: 8px; padding: 36px; box-shadow: 0 2px 16px rgba(0,0,0,.08); }
+    .form-group { margin-bottom: 20px; }
+    .field-label { display: block; font-size: .82rem; font-weight: 700; color: #1D2D3E; margin-bottom: 7px; }
+    .field-label .req { color: #E42A1C; margin-left: 2px; }
+    input[type="text"], input[type="email"], select, textarea {
+      width: 100%; padding: 10px 13px; border: 1.5px solid #C8D2DC; border-radius: 5px;
+      font-size: .9rem; color: #1D2D3E; background: white; font-family: inherit;
+      outline: none; transition: border-color .15s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: #0070F2; box-shadow: 0 0 0 3px rgba(0,112,242,.12); }
+    textarea { resize: vertical; min-height: 78px; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* Checkboxes */
+    .checkbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+    .cb-item { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
+    .cb-item input { width: 16px; height: 16px; margin-top: 2px; flex-shrink: 0; accent-color: #0070F2; cursor: pointer; }
+    .cb-item span { font-size: .83rem; line-height: 1.4; }
+
+    /* Radios */
+    .radio-row { display: flex; gap: 24px; flex-wrap: wrap; }
+    .radio-item { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .radio-item input { width: 16px; height: 16px; accent-color: #0070F2; cursor: pointer; }
+    .radio-item span { font-size: .88rem; }
+
+    /* Partner */
+    #partnerBlock { margin-top: 12px; display: none; }
+    #partnerBlock.show { display: block; }
+    .partner-hint { font-size: .78rem; color: #778899; margin-bottom: 6px; margin-top: 10px; }
+
+    /* Divider */
+    hr.fd { border: none; border-top: 1px solid #E8ECF0; margin: 26px 0; }
+
+    /* Submit */
+    .btn-submit { width: 100%; padding: 14px; background: #0070F2; color: white; border: none; border-radius: 6px; font-size: 1rem; font-weight: 700; cursor: pointer; transition: background .15s; margin-top: 6px; }
+    .btn-submit:hover { background: #0057C8; }
+    .btn-submit:disabled { background: #90BDF9; cursor: not-allowed; }
+    .form-note { font-size: .78rem; color: #8899AA; text-align: center; margin-top: 12px; }
+
+    /* Error */
+    .err-banner { background: #FFF1F0; border: 1px solid #FFBDBA; border-left: 4px solid #E42A1C; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px; font-size: .85rem; color: #891A11; display: none; }
+    .err-banner.show { display: block; }
+
+    /* Success */
+    #successCard { display: none; background: white; border-radius: 8px; padding: 56px 36px; box-shadow: 0 2px 16px rgba(0,0,0,.08); text-align: center; }
+    .success-icon { width: 64px; height: 64px; background: #E6FAF7; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 1.8rem; color: #0FCAB4; font-weight: 700; }
+    #successCard h2 { font-size: 1.35rem; color: #00144A; margin-bottom: 10px; }
+    #successCard p { font-size: .9rem; color: #556B8D; line-height: 1.6; max-width: 420px; margin: 0 auto; }
+
+    /* Footer */
+    .site-footer { background: #00144A; color: rgba(255,255,255,.4); text-align: center; padding: 18px; font-size: .76rem; }
+
+    @media (max-width: 600px) {
+      .site-header { padding: 14px 20px; }
+      .form-card { padding: 22px 16px; }
+      .checkbox-grid, .two-col { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="sap-logo">SAP</div>
+  <div class="header-divider"></div>
+  <div class="header-meta">
+    <h1>Digital Discovery Expert Series</h1>
+    <p id="hSub">Registro de Inscrição</p>
+  </div>
+</header>
+
+<div class="page-wrapper">
+  <div class="page-intro" id="pageIntro">
+    <h2 id="pageTitle">Formulário de Inscrição</h2>
+    <p id="pageSubtitle">Preencha os campos abaixo para confirmar sua presença.</p>
+  </div>
+
+  <div class="session-banner" id="sessionBanner">
+    <div class="lbl" id="bannerLbl">Sessão selecionada</div>
+    <div class="s-name" id="bannerSession"></div>
+    <div class="s-date" id="bannerDate"></div>
+  </div>
+
+  <div class="form-card" id="formCard">
+    <div class="err-banner" id="errBanner"></div>
+    <form id="regForm" novalidate>
+
+      <div class="form-group">
+        <label class="field-label" for="f-name" id="lName">Nome completo<span class="req">*</span></label>
+        <input type="text" id="f-name" autocomplete="name" required>
+      </div>
+
+      <div class="form-group">
+        <label class="field-label" for="f-email" id="lEmail">E-mail corporativo<span class="req">*</span></label>
+        <input type="email" id="f-email" autocomplete="email" required>
+      </div>
+
+      <div class="two-col form-group" style="margin-bottom:20px">
+        <div>
+          <label class="field-label" for="f-org" id="lOrg">Organização<span class="req">*</span></label>
+          <input type="text" id="f-org" autocomplete="organization" required>
+        </div>
+        <div>
+          <label class="field-label" for="f-role" id="lRole">Cargo<span class="req">*</span></label>
+          <input type="text" id="f-role" autocomplete="organization-title" required>
+        </div>
+      </div>
+
+      <hr class="fd">
+
+      <div class="form-group">
+        <label class="field-label" for="f-session" id="lSession">Sessão de interesse<span class="req">*</span></label>
+        <input type="text" id="f-session" required>
+      </div>
+
+      <div class="form-group">
+        <label class="field-label" for="f-country" id="lCountry">País<span class="req">*</span></label>
+        <select id="f-country" required>
+          <option value="" id="cPH">Selecione seu país...</option>
+          <option>Argentina</option><option>Bolivia</option><option>Brasil</option>
+          <option>Chile</option><option>Colombia</option><option>Costa Rica</option>
+          <option>Cuba</option><option>Ecuador</option><option>El Salvador</option>
+          <option>Guatemala</option><option>Haiti</option><option>Honduras</option>
+          <option>Jamaica</option><option>México</option><option>Nicaragua</option>
+          <option>Panamá</option><option>Paraguay</option><option>Perú</option>
+          <option>Puerto Rico</option><option>República Dominicana</option>
+          <option>Trinidad y Tobago</option><option>Uruguay</option>
+          <option>Venezuela</option><option id="cOther">Outro / Otro</option>
+        </select>
+      </div>
+
+      <hr class="fd">
+
+      <div class="form-group">
+        <label class="field-label" id="lTopics">Temas de interesse futuro</label>
+        <div class="checkbox-grid" id="topicsGrid"></div>
+      </div>
+
+      <hr class="fd">
+
+      <div class="form-group">
+        <label class="field-label" id="lContact">Autoriza a SAP a entrar em contato no futuro?<span class="req">*</span></label>
+        <div class="radio-row">
+          <label class="radio-item"><input type="radio" name="allowContact" value="yes" required><span id="lYes">Sim</span></label>
+          <label class="radio-item"><input type="radio" name="allowContact" value="no"><span id="lNo">Não</span></label>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0">
+        <label class="field-label" id="lInvite">Como recebeu o convite?<span class="req">*</span></label>
+        <div class="radio-row">
+          <label class="radio-item"><input type="radio" name="inviteSource" value="SAP" required onchange="togglePartner(this)"><span>SAP</span></label>
+          <label class="radio-item"><input type="radio" name="inviteSource" value="Partner" onchange="togglePartner(this)"><span id="lPartner">Parceiro SAP</span></label>
+        </div>
+        <div id="partnerBlock">
+          <p class="partner-hint" id="lPartnerName">Nome do parceiro</p>
+          <input type="text" id="f-partner" placeholder="Ex: Deloitte, Accenture, IBM...">
+        </div>
+      </div>
+
+      <hr class="fd">
+
+      <div class="form-group" style="margin-bottom:18px;">
+        <p id="lPrivacyNotice" style="font-size:.82rem; color:#556677; margin:0 0 12px 0; line-height:1.5;">
+          A SAP utilizará os dados fornecidos de acordo com a
+          <a id="lPrivacyLink" href="https://www.sap.com/brazil/privacy" target="_blank" rel="noopener" style="color:#0070F2;">Declaração de Privacidade</a>.
+        </p>
+        <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer;">
+          <input type="checkbox" id="privacyCheck" required style="margin-top:3px; flex-shrink:0; accent-color:#0070F2; width:16px; height:16px;">
+          <span id="lPrivacyCheck" style="font-size:.82rem; color:#334455; line-height:1.5;">
+            Sim, concordo que a SAP utilize meus dados para fins relacionados a este evento e aceito receber comunicações relevantes sobre produtos e serviços SAP.
+          </span>
+        </label>
+      </div>
+
+      <button type="submit" class="btn-submit" id="btnSub">Confirmar Inscrição</button>
+      <p class="form-note" id="fNote">Campos marcados com <span style="color:#E42A1C">*</span> são obrigatórios.</p>
+    </form>
+  </div>
+
+  <div id="successCard">
+    <div class="success-icon">✓</div>
+    <h2 id="sTitle">Inscrição Confirmada!</h2>
+    <p id="sMsg">Sua inscrição foi recebida. Em breve você receberá um e-mail de confirmação com os detalhes da sessão.</p>
+  </div>
+</div>
+
+<footer class="site-footer">© 2026 SAP SE. Digital Discovery Expert Series.</footer>
+
+<script>
+const API = 'https://spark-meeting.cfapps.us10-002.hana.ondemand.com/api/registrations';
+
+const T = {
+  pt: {
+    htmlLang:'pt-BR', hSub:'Registro de Inscrição', pageTitle:'Formulário de Inscrição',
+    pageSubtitle:'Preencha os campos abaixo para confirmar sua presença.',
+    bannerLbl:'Sessão selecionada',
+    lName:'Nome completo', lEmail:'E-mail corporativo', lOrg:'Organização', lRole:'Cargo',
+    lSession:'Sessão de interesse', lCountry:'País', cPH:'Selecione seu país...', cOther:'Outro',
+    lTopics:'Temas de interesse futuro',
+    topics:['Cloud ERP / S/4HANA Cloud','Finanças e Contabilidade',
+            'Gestão de Capital Humano (SuccessFactors)','Experiência do Cliente (CX)',
+            'Gestão de Compras (Ariba)','Supply Chain / Logística',
+            'SAP BTP e Integração','IA e Analytics (Business Data Cloud)'],
+    lContact:'Autoriza a SAP a entrar em contato no futuro?',
+    lYes:'Sim', lNo:'Não', lInvite:'Como recebeu o convite?',
+    lPartner:'Parceiro SAP', lPartnerName:'Nome do parceiro',
+    btnSub:'Confirmar Inscrição',
+    fNote:'Campos marcados com * são obrigatórios.',
+    sTitle:'Inscrição Confirmada!',
+    sMsg:'Sua inscrição foi recebida. Em breve você receberá um e-mail de confirmação.',
+    errReq:'Preencha todos os campos obrigatórios.', errSend:'Erro ao enviar. Tente novamente.',
+    privacyNotice:'A SAP utilizará os dados fornecidos de acordo com a',
+    privacyLink:'Declaração de Privacidade',
+    privacyHref:'https://www.sap.com/brazil/privacy',
+    privacyCheck:'Sim, concordo que a SAP utilize meus dados para fins relacionados a este evento e aceito receber comunicações relevantes sobre produtos e serviços SAP.',
+    errPrivacy:'É necessário aceitar os termos de privacidade para continuar.',
+  },
+  es: {
+    htmlLang:'es-419', hSub:'Registro de Inscripción', pageTitle:'Formulario de Inscripción',
+    pageSubtitle:'Complete los campos a continuación para confirmar su participación.',
+    bannerLbl:'Sesión seleccionada',
+    lName:'Nombre completo', lEmail:'Correo corporativo', lOrg:'Organización', lRole:'Cargo',
+    lSession:'Sesión de interés', lCountry:'País', cPH:'Seleccione su país...', cOther:'Otro',
+    lTopics:'Temas de interés futuro',
+    topics:['Cloud ERP / S/4HANA Cloud','Finanzas y Contabilidad',
+            'Gestión del Capital Humano (SuccessFactors)','Experiencia del Cliente (CX)',
+            'Gestión de Compras (Ariba)','Supply Chain / Logística',
+            'SAP BTP e Integración','IA y Analytics (Business Data Cloud)'],
+    lContact:'¿Autoriza a SAP a contactarle en el futuro?',
+    lYes:'Sí', lNo:'No', lInvite:'¿Cómo recibió la invitación?',
+    lPartner:'Socio SAP', lPartnerName:'Nombre del socio',
+    btnSub:'Confirmar Inscripción',
+    fNote:'Los campos marcados con * son obligatorios.',
+    sTitle:'¡Inscripción Confirmada!',
+    sMsg:'Su inscripción fue recibida. Pronto recibirá un correo de confirmación.',
+    errReq:'Complete todos los campos obligatorios.', errSend:'Error al enviar. Intente nuevamente.',
+    privacyNotice:'SAP utilizará los datos proporcionados de acuerdo con la',
+    privacyLink:'Declaración de Privacidad',
+    privacyHref:'https://www.sap.com/latinamerica/privacy',
+    privacyCheck:'Sí, acepto que SAP utilice mis datos con fines relacionados con este evento y acepto recibir comunicaciones relevantes sobre productos y servicios SAP.',
+    errPrivacy:'Es necesario aceptar los términos de privacidad para continuar.',
+  }
+};
+
+const p = new URLSearchParams(location.search);
+const lang = p.get('lang')?.toLowerCase().startsWith('es') ? 'es' : 'pt';
+const t = T[lang];
+const sessionParam = p.get('session') || '';
+const dateParam   = p.get('date')    || '';
+
+document.documentElement.lang = t.htmlLang;
+
+// Apply translations
+const map = {hSub:t.hSub, pageTitle:t.pageTitle, pageSubtitle:t.pageSubtitle,
+  bannerLbl:t.bannerLbl, lName:t.lName, lEmail:t.lEmail, lOrg:t.lOrg, lRole:t.lRole,
+  lSession:t.lSession, lCountry:t.lCountry, cPH:t.cPH, cOther:t.cOther,
+  lTopics:t.lTopics, lContact:t.lContact, lYes:t.lYes, lNo:t.lNo,
+  lInvite:t.lInvite, lPartner:t.lPartner, lPartnerName:t.lPartnerName,
+  btnSub:t.btnSub, fNote:t.fNote, sTitle:t.sTitle, sMsg:t.sMsg,
+  lPrivacyCheck:t.privacyCheck
+};
+Object.entries(map).forEach(([id, txt]) => {
+  const el = document.getElementById(id);
+  if (el) {
+    // preserve .req span inside field-labels
+    if (el.classList.contains('field-label')) {
+      const req = el.querySelector('.req');
+      el.textContent = txt;
+      if (req) el.appendChild(req);
+    } else {
+      el.textContent = txt;
+    }
+  }
+});
+
+// Build topics checkboxes
+const grid = document.getElementById('topicsGrid');
+t.topics.forEach(topic => {
+  const lbl = document.createElement('label');
+  lbl.className = 'cb-item';
+  lbl.innerHTML = `<input type="checkbox" value="${topic}"><span>${topic}</span>`;
+  grid.appendChild(lbl);
+});
+
+// Apply privacy notice translations
+document.getElementById('lPrivacyNotice').innerHTML =
+  t.privacyNotice + ' <a href="' + t.privacyHref + '" target="_blank" rel="noopener" style="color:#0070F2;">' + t.privacyLink + '</a>.';
+
+
+// Pre-fill session from URL
+if (sessionParam) {
+  document.getElementById('f-session').value = sessionParam;
+  const banner = document.getElementById('sessionBanner');
+  banner.classList.add('show');
+  document.getElementById('bannerSession').textContent = sessionParam;
+  if (dateParam) document.getElementById('bannerDate').textContent = dateParam;
+}
+
+function togglePartner(radio) {
+  const block = document.getElementById('partnerBlock');
+  if (radio.value === 'Partner') { block.classList.add('show'); }
+  else { block.classList.remove('show'); document.getElementById('f-partner').value = ''; }
+}
+
+// Submit
+document.getElementById('regForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const err = document.getElementById('errBanner');
+  err.classList.remove('show');
+
+  const name       = document.getElementById('f-name').value.trim();
+  const email      = document.getElementById('f-email').value.trim();
+  const org        = document.getElementById('f-org').value.trim();
+  const role       = document.getElementById('f-role').value.trim();
+  const session    = document.getElementById('f-session').value.trim();
+  const country    = document.getElementById('f-country').value;
+  const allowContact = document.querySelector('input[name="allowContact"]:checked')?.value;
+  const inviteSource = document.querySelector('input[name="inviteSource"]:checked')?.value;
+  const partnerName  = document.getElementById('f-partner').value.trim();
+  const topics = [...document.querySelectorAll('#topicsGrid input:checked')].map(cb => cb.value);
+  const privacyAccepted = document.getElementById('privacyCheck').checked;
+
+  if (!name || !email || !org || !role || !session || !country || !allowContact || !inviteSource) {
+    err.textContent = t.errReq;
+    err.classList.add('show');
+    err.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    return;
+  }
+  if (!privacyAccepted) {
+    err.textContent = t.errPrivacy;
+    err.classList.add('show');
+    err.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    return;
+  }
+
+  const btn = document.getElementById('btnSub');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+
+  try {
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        name, email, organization: org, role, session,
+        sessionDate: dateParam, country, topics,
+        allowContact: allowContact === 'yes', inviteSource,
+        partnerName: inviteSource === 'Partner' ? partnerName : '',
+        language: lang,
+        privacyAccepted: true,
+      }),
+    });
+    if (!res.ok) throw new Error(res.status);
+
+    document.getElementById('formCard').style.display = 'none';
+    document.getElementById('sessionBanner').style.display = 'none';
+    document.getElementById('pageIntro').style.display = 'none';
+    document.getElementById('successCard').style.display = 'block';
+    window.scrollTo({top:0, behavior:'smooth'});
+  } catch {
+    err.textContent = t.errSend;
+    err.classList.add('show');
+    btn.disabled = false;
+    btn.textContent = t.btnSub;
+    err.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+});
+</script>
+</body>
+</html>
