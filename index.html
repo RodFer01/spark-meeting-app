@@ -985,6 +985,7 @@
                     <select id="intel-session-filter" style="padding:7px 10px; border:1px solid var(--sap-gray-border); border-radius:7px; font-size:13px; max-width:280px;" onchange="filterIntelligence()">
                         <option value="">All sessions</option>
                     </select>
+                    <input type="date" id="intel-date-filter" title="Filter by session date" style="padding:7px 10px; border:1px solid var(--sap-gray-border); border-radius:7px; font-size:13px;" onchange="filterIntelligence()">
                     <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--sap-text); cursor:pointer; white-space:nowrap;">
                         <input type="checkbox" id="intel-attended-filter" onchange="filterIntelligence()" style="accent-color:var(--sap-blue); width:15px; height:15px; cursor:pointer;">
                         Attended only
@@ -6039,6 +6040,8 @@ ${orgRows}
         async function initIntelligencePage() {
             _intelSelectedSessions.clear();
             _intelData = null;
+            const dateFilterEl = document.getElementById('intel-date-filter');
+            if (dateFilterEl) dateFilterEl.value = '';
             ['intel-kpis','intel-charts-row','intel-filter-bar','intel-results','intel-loading'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.style.display = 'none';
@@ -6215,6 +6218,7 @@ ${orgRows}
             const ae      = document.getElementById('intel-ae-filter')?.value || '';
             const region  = document.getElementById('intel-region-filter')?.value || '';
             const sessFilter    = document.getElementById('intel-session-filter')?.value || '';
+            const dateFilter    = document.getElementById('intel-date-filter')?.value || '';
             const attendedOnly  = document.getElementById('intel-attended-filter')?.checked || false;
             const CLR = { potential_lead:'#e53e3e', maturation:'#3182ce', adoption:'#38a169', unknown:'#718096' };
             const LBL = { potential_lead:'Potential Lead', maturation:'Maturation', adoption:'Adoption', unknown:'Unknown' };
@@ -6225,7 +6229,8 @@ ${orgRows}
                 if (ae     && (c.ae || c.opp_owner_name) !== ae)  return false;
                 if (region && _intelRegion(c) !== region)       return false;
                 if (sessFilter && !(c.participants||[]).some(p => p.session === sessFilter)) return false;
-                if (attendedOnly && !(c.participants||[]).some(p => p.attended && (!sessFilter || p.session === sessFilter))) return false;
+                if (dateFilter && !(c.participants||[]).some(p => p.session_date === dateFilter)) return false;
+                if (attendedOnly && !(c.participants||[]).some(p => p.attended && (!sessFilter || p.session === sessFilter) && (!dateFilter || p.session_date === dateFilter))) return false;
                 return true;
             });
 
@@ -6275,6 +6280,7 @@ ${orgRows}
                 const allPart = (() => {
                     let pts = c.participants || [];
                     if (sessFilter)    pts = pts.filter(p => p.session === sessFilter);
+                    if (dateFilter)    pts = pts.filter(p => p.session_date === dateFilter);
                     if (attendedOnly)  pts = pts.filter(p => p.attended);
                     return pts;
                 })();
