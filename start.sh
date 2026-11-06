@@ -2,13 +2,20 @@
 cd "$(dirname "$0")"
 PORT=8768
 
+# Load local env overrides (gitignored — safe for secrets)
+if [ -f ".env.local" ]; then
+  set -a; source .env.local; set +a
+fi
+
 if lsof -i :$PORT -t >/dev/null 2>&1; then
   echo "Spark Meeting already running on port $PORT"
   open "http://localhost:$PORT"
   exit 0
 fi
 
-if [ -d "../m365-mcp-venv" ]; then
+if [ -d ".venv" ]; then
+  PYTHON=".venv/bin/python3"
+elif [ -d "../m365-mcp-venv" ]; then
   PYTHON="../m365-mcp-venv/bin/python3"
 else
   PYTHON="python3"

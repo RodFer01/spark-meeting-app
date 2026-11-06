@@ -671,6 +671,10 @@
                         Import Excel
                     </button>
                     <input type="file" id="reg-import-file" accept=".xlsx" style="display:none" onchange="importRegistrations(this)">
+                    <button class="btn btn-secondary" id="enrich-domains-btn" onclick="enrichRegistrationsByDomain()" title="Match company name, AE, FLSM and SDE from pipeline using email domain">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
+                        Enrich by Domain
+                    </button>
                     <button class="btn btn-primary" onclick="loadRegistrations()">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
                         Refresh
@@ -5025,6 +5029,28 @@ ${orgRows}
         }
 
         // ============ REGISTRATION IMPORT ============
+        async function enrichRegistrationsByDomain() {
+            const btn = document.getElementById('enrich-domains-btn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Enriching…'; }
+            showToast('Enriching registrations by email domain…', 'info');
+            try {
+                const r = await fetch('/api/registrations/enrich-domains', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ..._apiHeaders() },
+                    body: JSON.stringify({ overwrite: true }),
+                });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.detail || 'Error');
+                const msg = `Enriched: ${data.enriched} | Not found: ${data.not_found} | Skipped: ${data.skipped} / ${data.total}`;
+                showToast(msg, data.enriched > 0 ? 'success' : 'info');
+                if (data.enriched > 0) await loadRegistrations();
+            } catch (e) {
+                showToast('Enrich error: ' + e.message, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg> Enrich by Domain'; }
+            }
+        }
+
         async function importRegistrations(input) {
             const file = input.files[0];
             input.value = '';

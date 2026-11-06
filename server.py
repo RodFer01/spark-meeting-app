@@ -385,6 +385,119 @@ async def delete_registration(reg_id: str, request: Request):
     await _hx("DELETE FROM SPARK_REGISTRATIONS WHERE id = ?", (reg_id,))
 
 
+@app.post("/api/registrations/enrich-domains")
+async def enrich_registrations_by_domain(request: Request, body: Any = Body(default={})):
+    """Enrich registrations with company name, AE, FLSM, SDE from pipeline via email domain.
+
+    Iterates all registrations (or filtered by session), extracts each email domain,
+    calls dh-api /api/outreach/contacts/by-domain/{domain}, and patches data_json with:
+      organization (corrected), ae, ae_email, flsm, sde.
+
+    Body (optional):
+      session     — filter to a specific session title
+      overwrite   — if false (default), only fill blank fields; if true, always overwrite
+    """
+    _check_api_key(request)
+
+    session_filter = body.get("session") if isinstance(body, dict) else None
+    overwrite      = bool((body.get("overwrite", False)) if isinstance(body, dict) else False)
+
+    if session_filter:
+        rows = await _hq(
+            "SELECT id, data_json FROM SPARK_REGISTRATIONS WHERE data_json LIKE ? LIMIT 10000",
+            (f'%{session_filter}%',),
+        )
+    else:
+        rows = await _hq("SELECT id, data_json FROM SPARK_REGISTRATIONS LIMIT 10000", ())
+
+    regs = [_from_hana(r) for r in rows]
+
+    # Collect unique domains
+    domain_map: dict[str, dict | None] = {}  # domain → dh-api result (lazily populated)
+    for reg in regs:
+        email = (reg.get("email") or "").strip().lower()
+        if "@" in email:
+            domain = email.split("@", 1)[1]
+            if domain and domain not in domain_map:
+                domain_map[domain] = None
+
+    # Resolve each domain against dh-api (bounded concurrency: 5 at a time)
+    sem = asyncio.Semaphore(5)
+
+    async def _resolve(c: httpx.AsyncClient, domain: str) -> tuple[str, dict | None]:
+        async with sem:
+            result = await _dh_get(c, f"/api/outreach/contacts/by-domain/{domain}")
+            if isinstance(result, dict) and result.get("match"):
+                return domain, result["match"]
+            return domain, None
+
+    async with httpx.AsyncClient() as c:
+        tasks = [_resolve(c, d) for d in domain_map]
+        results = await asyncio.gather(*tasks)
+
+    for domain, match in results:
+        domain_map[domain] = match
+
+    # Patch registrations
+    enriched = 0
+    skipped  = 0
+    not_found = 0
+    detail: list[dict] = []
+
+    for reg in regs:
+        email = (reg.get("email") or "").strip().lower()
+        if "@" not in email:
+            skipped += 1
+            continue
+
+        domain = email.split("@", 1)[1]
+        match  = domain_map.get(domain)
+
+        if not match:
+            not_found += 1
+            detail.append({"id": reg.get("id"), "email": email, "status": "no_match"})
+            continue
+
+        updates: dict = {}
+        if overwrite or not reg.get("organization"):
+            updates["organization"] = match.get("account_name") or reg.get("organization")
+        if overwrite or not reg.get("ae"):
+            updates["ae"]       = match.get("ae_name")
+            updates["ae_email"] = match.get("ae_email")
+        if overwrite or not reg.get("flsm"):
+            updates["flsm"] = match.get("flsm")
+        if overwrite or not reg.get("sde"):
+            updates["sde"]  = match.get("sde")
+
+        if not any(v for v in updates.values()):
+            skipped += 1
+            continue
+
+        reg_id  = reg.get("id") or reg.get("_id")
+        patched = {**reg, **updates}
+        patched.pop("_id", None)
+        await _upsert_reg(reg_id, patched)
+        enriched += 1
+        detail.append({
+            "id":           reg_id,
+            "email":        email,
+            "status":       "enriched",
+            "organization": updates.get("organization"),
+            "ae":           updates.get("ae"),
+            "flsm":         updates.get("flsm"),
+            "sde":          updates.get("sde"),
+        })
+
+    return {
+        "ok":        True,
+        "enriched":  enriched,
+        "skipped":   skipped,
+        "not_found": not_found,
+        "total":     len(regs),
+        "detail":    detail,
+    }
+
+
 @app.get("/api/ics/{reg_id}")
 async def get_ics(reg_id: str):
     rows = await _hq("SELECT id, data_json FROM SPARK_REGISTRATIONS WHERE id = ?", (reg_id,))
