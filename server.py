@@ -2073,7 +2073,8 @@ async def run_intelligence_batch(request: Request):
                     try:
                         result = await _classify_org(c, org, l1_areas,
                                                      email_domains=org_domains_b.get(org, []))
-                    except Exception:
+                    except Exception as exc:
+                        print(f"[batch] classify error for '{org}': {exc}", flush=True)
                         result = {"classification": "unknown", "open_opps": 0, "pipeline": [],
                                   "installed_solutions": [], "installed_products": [], "installed_by_l1": {},
                                   "top_contacts": [], "account_bp": None,
