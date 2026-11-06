@@ -1636,24 +1636,51 @@ async def _dh_get(c: httpx.AsyncClient, path: str, params: dict | None = None) -
 
 
 async def _classify_org(
-    c: httpx.AsyncClient, org: str, l1_areas: list[str]
+    c: httpx.AsyncClient, org: str, l1_areas: list[str],
+    account_bpid: str | None = None,
+    email_domains: list[str] | None = None,
 ) -> dict:
-    """Return classification + enrichment data for one organization."""
-    # 1. Get contacts (also provides account_bp via the outreach search join)
-    contacts_data = await _dh_get(c, f"/api/outreach/contacts/search/{org}")
-    contacts = contacts_data.get("contacts", []) if isinstance(contacts_data, dict) else (contacts_data if isinstance(contacts_data, list) else [])
+    """Return classification + enrichment data for one organization.
 
-    account_bp = None
-    for contact in contacts:
-        bp = contact.get("account_bpid") or contact.get("account_bp")
-        if bp:
-            account_bp = str(bp)
-            break
+    account_bpid: if already resolved (e.g. via domain lookup), skip Outreach name search.
+    email_domains: list of domains from participant emails — used to resolve account_bpid
+                   when it is not provided, as a more reliable alternative to name search.
+    """
+    account_bp = account_bpid or None
+    contacts: list[dict] = []
+
+    # 1a. If account_bpid already known, fetch contacts directly by BP
+    if account_bp:
+        contacts_data = await _dh_get(c, f"/api/outreach/contacts/{account_bp}")
+        raw = contacts_data.get("contacts", []) if isinstance(contacts_data, dict) else []
+        contacts = raw if isinstance(raw, list) else []
+
+    # 1b. If BP not known, try domain lookup before falling back to name search
+    if not account_bp and email_domains:
+        for domain in email_domains:
+            domain_data = await _dh_get(c, f"/api/outreach/contacts/by-domain/{domain}")
+            if isinstance(domain_data, dict) and domain_data.get("match"):
+                account_bp = str(domain_data["match"]["account_bpid"])
+                contacts_data = await _dh_get(c, f"/api/outreach/contacts/{account_bp}")
+                raw = contacts_data.get("contacts", []) if isinstance(contacts_data, dict) else []
+                contacts = raw if isinstance(raw, list) else []
+                break
+
+    # 1c. Final fallback: fuzzy name search in Outreach
+    if not account_bp:
+        contacts_data = await _dh_get(c, f"/api/outreach/contacts/search/{org}")
+        raw = contacts_data.get("contacts", []) if isinstance(contacts_data, dict) else (contacts_data if isinstance(contacts_data, list) else [])
+        contacts = raw if isinstance(raw, list) else []
+        for contact in contacts:
+            bp = contact.get("account_bpid") or contact.get("account_bp")
+            if bp:
+                account_bp = str(bp)
+                break
 
     # 2. Installed base (adoption check)
-    installed_solutions: list[str] = []   # L1 category names
-    installed_products: list[str] = []    # specific product labels
-    installed_by_l1: dict[str, list[str]] = {}  # grouped: {L1: [product, ...]}
+    installed_solutions: list[str] = []
+    installed_products: list[str] = []
+    installed_by_l1: dict[str, list[str]] = {}
     adopted = False
     if account_bp:
         ib_data = await _dh_get(c, f"/api/ae-analysis/installed-base/{account_bp}")
@@ -1668,13 +1695,52 @@ async def _classify_org(
             if l1_areas and any(s in l1_areas for s in installed_solutions):
                 adopted = True
 
-    # 3. Pipeline opps for this session's area
+    # 3. Pipeline opps — query by account_bp directly if known, otherwise by name
     open_opps = 0
     pipeline_summary: list[dict] = []
     ae_list: list[str] = []
     region_list: list[str] = []
-    if l1_areas:
-        for l1 in l1_areas[:1]:  # query first L1 only to avoid over-fetching
+
+    if account_bp:
+        # Direct account_bp lookup — precise, no name-matching ambiguity
+        bp_data = await _dh_get(c, f"/api/pipeline/account/{account_bp}")
+        if bp_data and isinstance(bp_data, dict):
+            open_opps = bp_data.get("open_opps", 0)
+            for opp in (bp_data.get("opportunities") or []):
+                drm = (opp.get("drm_category") or "").lower()
+                if drm in ("disc/lost", "booked/won", "excluded from pipeline"):
+                    continue
+                ae_name  = opp.get("opp_owner_name", "")
+                ae_email = opp.get("opp_owner_email", "")
+                flsm     = opp.get("flsm", "")
+                region   = opp.get("region_lvl2") or opp.get("region_lvl3") or opp.get("region_lvl4", "")
+                # Only include opps matching the session's L1 area (if filter active)
+                sol_l1 = opp.get("solution_area_l1", "")
+                if l1_areas and sol_l1 not in l1_areas:
+                    continue
+                pipeline_summary.append({
+                    "id":          opp.get("opportunity_id", ""),
+                    "phase":       opp.get("opp_phase", ""),
+                    "acv":         opp.get("acv_usd"),
+                    "qtr":         opp.get("closing_qtr", ""),
+                    "ae":          ae_name,
+                    "ae_email":    ae_email,
+                    "flsm":        flsm,
+                    "region":      region,
+                    "solution_l1": sol_l1,
+                    "solution_l2": opp.get("sub_solution_area_l2", ""),
+                })
+                if ae_name and ae_name not in ae_list:
+                    ae_list.append(ae_name)
+                if region and region not in region_list:
+                    region_list.append(region)
+            # If no L1 filter matched, fall back to all open opps for AE/FLSM/region
+            if not pipeline_summary:
+                ae_list   = [x for x in [bp_data.get("ae")] if x]
+                region_list = [x for x in [bp_data.get("region")] if x]
+    elif l1_areas:
+        # Fallback: name-based search (less reliable)
+        for l1 in l1_areas[:1]:
             pipeline_data = await _dh_get(c, "/api/pipeline", {
                 "search": org,
                 "sol_l1": l1,
@@ -1690,16 +1756,16 @@ async def _classify_org(
                         flsm     = opp.get("FLSM") or opp.get("flsm", "")
                         region   = opp.get("region_lvl2") or opp.get("region_lvl3") or opp.get("region_lvl4", "")
                         pipeline_summary.append({
-                            "id":           opp.get("opportunity_id", ""),
-                            "phase":        opp.get("opp_phase", ""),
-                            "acv":          opp.get("acv_usd") or opp.get("acv_total_opp"),
-                            "qtr":          opp.get("closing_qtr", ""),
-                            "ae":           ae_name,
-                            "ae_email":     ae_email,
-                            "flsm":         flsm,
-                            "region":       region,
-                            "solution_l1":  opp.get("solution_area_l1", ""),
-                            "solution_l2":  opp.get("sub_solution_area_l2", ""),
+                            "id":          opp.get("opportunity_id", ""),
+                            "phase":       opp.get("opp_phase", ""),
+                            "acv":         opp.get("acv_usd") or opp.get("acv_total_opp"),
+                            "qtr":         opp.get("closing_qtr", ""),
+                            "ae":          ae_name,
+                            "ae_email":    ae_email,
+                            "flsm":        flsm,
+                            "region":      region,
+                            "solution_l1": opp.get("solution_area_l1", ""),
+                            "solution_l2": opp.get("sub_solution_area_l2", ""),
                         })
                         if ae_name and ae_name not in ae_list:
                             ae_list.append(ae_name)
@@ -1709,7 +1775,7 @@ async def _classify_org(
     # 4. Classification
     if adopted:
         classification = "adoption"
-    elif open_opps > 0:
+    elif open_opps > 0 or pipeline_summary:
         classification = "maturation"
     else:
         classification = "potential_lead"
@@ -1733,6 +1799,17 @@ async def _classify_org(
             flsm_list.append(opp["flsm"])
         if opp.get("ae_email") and opp["ae_email"] not in ae_email_list:
             ae_email_list.append(opp["ae_email"])
+
+    # Also pull FLSM/ae_email from top-level bp_data when pipeline_summary is empty
+    if account_bp and not pipeline_summary:
+        bp_data_ref = await _dh_get(c, f"/api/pipeline/account/{account_bp}")
+        if bp_data_ref and isinstance(bp_data_ref, dict):
+            if bp_data_ref.get("flsm") and bp_data_ref["flsm"] not in flsm_list:
+                flsm_list.append(bp_data_ref["flsm"])
+            if bp_data_ref.get("ae_email") and bp_data_ref["ae_email"] not in ae_email_list:
+                ae_email_list.append(bp_data_ref["ae_email"])
+            if bp_data_ref.get("ae") and bp_data_ref["ae"] not in ae_list:
+                ae_list.append(bp_data_ref["ae"])
 
     return {
         "classification":      classification,
@@ -1785,11 +1862,19 @@ async def get_intelligence(request: Request, session: list[str] = Query(default=
 
     l1_areas = list(l1_areas_set)
 
-    # Group registrations by organization (across all selected sessions)
-    orgs: dict[str, list] = {}
+    # ── Pre-resolve email domains → canonical account_bpid + account_name ────────
+    # Collect all email domains per org group, then resolve domains in bulk
+    # so inconsistent org names ("Jan/SA", "Implementos agricos Jan", etc.)
+    # all map to the same canonical account_bpid from Outreach.
+
+    # Step A: group participants by their raw org label, collect domains
+    raw_orgs: dict[str, list] = {}
+    org_domains: dict[str, set] = {}  # raw_org → set of email domains
+    _PERSONAL = {"gmail.com", "hotmail.com", "yahoo.com", "outlook.com",
+                 "yahoo.com.br", "hotmail.com.br", "gmail.com.br", "uol.com.br"}
     for reg in session_regs:
         org = (reg.get("organization") or reg.get("org") or "Unknown").strip()
-        orgs.setdefault(org, []).append({
+        raw_orgs.setdefault(org, []).append({
             "name":         reg.get("name", ""),
             "email":        reg.get("email", ""),
             "country":      reg.get("country", ""),
@@ -1799,6 +1884,70 @@ async def get_intelligence(request: Request, session: list[str] = Query(default=
             "session_date": reg.get("sessionDate") or reg.get("session_date", ""),
             "sapContact":   reg.get("sapContact"),
         })
+        email = (reg.get("email") or "").strip().lower()
+        if "@" in email:
+            domain = email.split("@", 1)[1]
+            if domain and domain not in _PERSONAL:
+                org_domains.setdefault(org, set()).add(domain)
+
+    # Step B: resolve all unique domains (bounded concurrency: 5 at a time)
+    all_domains = {d for ds in org_domains.values() for d in ds}
+    domain_cache: dict[str, dict | None] = {}
+    _sem_domain = asyncio.Semaphore(5)
+
+    async def _resolve_domain(domain: str):
+        async with _sem_domain:
+            async with httpx.AsyncClient(timeout=10) as hc:
+                result = await _dh_get(hc, f"/api/outreach/contacts/by-domain/{domain}")
+                if isinstance(result, dict) and result.get("match"):
+                    domain_cache[domain] = result["match"]
+                else:
+                    domain_cache[domain] = None
+
+    await asyncio.gather(*[_resolve_domain(d) for d in all_domains])
+
+    # Step C: for each raw_org, pick the best account_bpid + canonical name
+    # by choosing the domain match with the most pipeline_opps
+    org_bp_map: dict[str, str | None] = {}     # raw_org → account_bpid
+    org_canon_map: dict[str, str] = {}          # raw_org → canonical account_name
+    for org, domains in org_domains.items():
+        best_match = None
+        for d in domains:
+            match = domain_cache.get(d)
+            if match:
+                if best_match is None or (match.get("pipeline_opps", 0) > best_match.get("pipeline_opps", 0)):
+                    best_match = match
+        if best_match:
+            org_bp_map[org] = str(best_match["account_bpid"])
+            org_canon_map[org] = best_match["account_name"] or org
+        else:
+            org_bp_map[org] = None
+            org_canon_map[org] = org
+
+    # Step D: merge raw_org groups that resolve to the same account_bpid
+    # (e.g. "Jan/SA" and "Implementos agricos Jan" → "Implementos Agricolas Jan S/A")
+    orgs: dict[str, list] = {}           # canonical_name → participants
+    orgs_bp: dict[str, str | None] = {}  # canonical_name → account_bpid
+    orgs_domains: dict[str, list] = {}   # canonical_name → domains list
+    seen_bps: dict[str, str] = {}        # account_bpid → canonical_name already used
+
+    for raw_org, participants in raw_orgs.items():
+        bp   = org_bp_map.get(raw_org)
+        canon = org_canon_map.get(raw_org, raw_org)
+        if bp and bp in seen_bps:
+            # Merge into the existing canonical group
+            key = seen_bps[bp]
+        else:
+            key = canon
+            if bp:
+                seen_bps[bp] = key
+        orgs.setdefault(key, []).extend(participants)
+        if bp:
+            orgs_bp[key] = bp
+        orgs_domains.setdefault(key, [])
+        for d in org_domains.get(raw_org, set()):
+            if d not in orgs_domains[key]:
+                orgs_domains[key].append(d)
 
     # Classify each org (max 10 concurrent)
     semaphore = asyncio.Semaphore(10)
@@ -1807,7 +1956,11 @@ async def get_intelligence(request: Request, session: list[str] = Query(default=
         async with semaphore:
             async with httpx.AsyncClient(timeout=15) as c:
                 try:
-                    result = await _classify_org(c, org, l1_areas)
+                    result = await _classify_org(
+                        c, org, l1_areas,
+                        account_bpid=orgs_bp.get(org),
+                        email_domains=orgs_domains.get(org, []),
+                    )
                 except Exception:
                     result = {"classification": "unknown", "open_opps": 0, "pipeline": [],
                               "installed_solutions": [], "installed_products": [], "installed_by_l1": {},
@@ -1890,6 +2043,7 @@ async def run_intelligence_batch(request: Request):
         l1_areas = list(set(l for a in ([area] if area else []) for l in _SPARK_TO_L1.get(a, [])))
 
         orgs: dict[str, list] = {}
+        org_domains_b: dict[str, list] = {}
         for reg in sess_regs:
             org = (reg.get("organization") or reg.get("org") or "Unknown").strip()
             orgs.setdefault(org, []).append({
@@ -1902,6 +2056,13 @@ async def run_intelligence_batch(request: Request):
                 "session_date": reg.get("sessionDate") or reg.get("session_date", ""),
                 "sapContact":   reg.get("sapContact"),
             })
+            email = (reg.get("email") or "").strip().lower()
+            if "@" in email:
+                domain = email.split("@", 1)[1]
+                if domain and domain not in _PERSONAL:
+                    org_domains_b.setdefault(org, [])
+                    if domain not in org_domains_b[org]:
+                        org_domains_b[org].append(domain)
 
         semaphore = asyncio.Semaphore(8)
 
@@ -1909,7 +2070,8 @@ async def run_intelligence_batch(request: Request):
             async with semaphore:
                 async with httpx.AsyncClient(timeout=15) as c:
                     try:
-                        result = await _classify_org(c, org, l1_areas)
+                        result = await _classify_org(c, org, l1_areas,
+                                                     email_domains=org_domains_b.get(org, []))
                     except Exception:
                         result = {"classification": "unknown", "open_opps": 0, "pipeline": [],
                                   "installed_solutions": [], "installed_products": [], "installed_by_l1": {},
