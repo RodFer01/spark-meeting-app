@@ -412,13 +412,13 @@ async def enrich_registrations_by_domain(request: Request, body: Any = Body(defa
 
     regs = [_from_hana(r) for r in rows]
 
-    # Collect unique domains
+    # Collect unique domains (skip personal/public email providers)
     domain_map: dict[str, dict | None] = {}  # domain → dh-api result (lazily populated)
     for reg in regs:
         email = (reg.get("email") or "").strip().lower()
         if "@" in email:
             domain = email.split("@", 1)[1]
-            if domain and domain not in domain_map:
+            if domain and domain not in _PERSONAL and domain not in domain_map:
                 domain_map[domain] = None
 
     # Resolve each domain against dh-api (bounded concurrency: 5 at a time)
@@ -459,8 +459,15 @@ async def enrich_registrations_by_domain(request: Request, body: Any = Body(defa
             continue
 
         updates: dict = {}
-        if overwrite or not reg.get("organization"):
-            updates["organization"] = match.get("account_name") or reg.get("organization")
+        # Only update org name when domain root clearly belongs to the matched company.
+        # Partners/consultants may be registered under client accounts in Outreach,
+        # so we require the domain root (e.g. "jan" from "jan.com.br") to appear in
+        # the matched account_name. This avoids overwriting correct self-reported names.
+        account_name = match.get("account_name") or ""
+        domain_root  = domain.split(".")[0].lower()
+        org_match_confident = len(domain_root) >= 3 and domain_root in account_name.lower()
+        if org_match_confident and (overwrite or not reg.get("organization")):
+            updates["organization"] = account_name
         if overwrite or not reg.get("ae"):
             updates["ae"]       = match.get("ae_name")
             updates["ae_email"] = match.get("ae_email")
@@ -2168,11 +2175,9 @@ async def get_intelligence_snapshot_data(request: Request, session: list[str] = 
                 if order_map.get(co.get("classification"), 3) < order_map.get(existing.get("classification"), 3):
                     companies_merged[org]["classification"] = co["classification"]
                 existing["sessions"].append(sess_title)
-                seen = {p["email"] for p in existing["participants"]}
-                for p in co.get("participants", []):
-                    if p["email"] not in seen:
-                        existing["participants"].append(p)
-                        seen.add(p["email"])
+                # Keep all attendance records — one entry per (participant × session).
+                # Do NOT deduplicate by email: the same person attending 3 sessions = 3 rows.
+                existing["participants"].extend(co.get("participants", []))
                 existing["open_opps"] = existing.get("open_opps", 0) + co.get("open_opps", 0)
 
     companies_list = list(companies_merged.values())
