@@ -1278,6 +1278,9 @@ _SPARK_TO_L1: dict[str, list[str]] = {
     "Data & AI":      ["BAIP - Data & AI"],
 }
 
+_PERSONAL = {"gmail.com", "hotmail.com", "yahoo.com", "outlook.com",
+             "yahoo.com.br", "hotmail.com.br", "gmail.com.br", "uol.com.br"}
+
 
 def _dh_bearer() -> str:
     if not _DH_JWT_SECRET:
@@ -1870,8 +1873,6 @@ async def get_intelligence(request: Request, session: list[str] = Query(default=
     # Step A: group participants by their raw org label, collect domains
     raw_orgs: dict[str, list] = {}
     org_domains: dict[str, set] = {}  # raw_org → set of email domains
-    _PERSONAL = {"gmail.com", "hotmail.com", "yahoo.com", "outlook.com",
-                 "yahoo.com.br", "hotmail.com.br", "gmail.com.br", "uol.com.br"}
     for reg in session_regs:
         org = (reg.get("organization") or reg.get("org") or "Unknown").strip()
         raw_orgs.setdefault(org, []).append({
@@ -2854,15 +2855,24 @@ async def match_campaign_contact(request: Request, email: str = "", name: str = 
     return matches
 
 # ── Presence ──────────────────────────────────────────────────────────────────
+_presence_table_ready = False
+
 async def _ensure_presence_table():
-    await _hx(
-        "CREATE TABLE IF NOT EXISTS SPARK_PRESENCE ("
-        "  user_id VARCHAR(128) PRIMARY KEY,"
-        "  user_email VARCHAR(256),"
-        "  user_name NCLOB,"
-        "  last_seen VARCHAR(64)"
-        ")"
-    )
+    global _presence_table_ready
+    if _presence_table_ready:
+        return
+    try:
+        await _hx(
+            "CREATE TABLE SPARK_PRESENCE ("
+            "  user_id VARCHAR(128) PRIMARY KEY,"
+            "  user_email VARCHAR(256),"
+            "  user_name NCLOB,"
+            "  last_seen VARCHAR(64)"
+            ")"
+        )
+    except Exception:
+        pass  # table already exists
+    _presence_table_ready = True
 
 @app.post("/api/presence/heartbeat")
 async def presence_heartbeat(request: Request):
