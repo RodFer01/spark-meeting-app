@@ -1658,6 +1658,7 @@ async def _classify_org(
     """
     account_bp = account_bpid or None
     contacts: list[dict] = []
+    bp_data: dict | None = None  # populated when pipeline/account/{bp} is called
 
     # 1a. If account_bpid already known, fetch contacts directly by BP
     if account_bp:
@@ -1810,16 +1811,15 @@ async def _classify_org(
         if opp.get("ae_email") and opp["ae_email"] not in ae_email_list:
             ae_email_list.append(opp["ae_email"])
 
-    # Also pull FLSM/ae_email from top-level bp_data when pipeline_summary is empty
-    if account_bp and not pipeline_summary:
-        bp_data_ref = await _dh_get(c, f"/api/pipeline/account/{account_bp}")
-        if bp_data_ref and isinstance(bp_data_ref, dict):
-            if bp_data_ref.get("flsm") and bp_data_ref["flsm"] not in flsm_list:
-                flsm_list.append(bp_data_ref["flsm"])
-            if bp_data_ref.get("ae_email") and bp_data_ref["ae_email"] not in ae_email_list:
-                ae_email_list.append(bp_data_ref["ae_email"])
-            if bp_data_ref.get("ae") and bp_data_ref["ae"] not in ae_list:
-                ae_list.append(bp_data_ref["ae"])
+    if account_bp and not pipeline_summary and bp_data:
+        if bp_data.get("flsm") and bp_data["flsm"] not in flsm_list:
+            flsm_list.append(bp_data["flsm"])
+        for extra_ae in ([bp_data.get("ae")] + (bp_data.get("aes") or [])):
+            if extra_ae and extra_ae not in ae_list:
+                ae_list.append(extra_ae)
+        for extra_flsm in bp_data.get("flsms") or []:
+            if extra_flsm and extra_flsm not in flsm_list:
+                flsm_list.append(extra_flsm)
 
     return {
         "classification":      classification,

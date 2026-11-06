@@ -985,7 +985,8 @@
                     <select id="intel-session-filter" style="padding:7px 10px; border:1px solid var(--sap-gray-border); border-radius:7px; font-size:13px; max-width:280px;" onchange="filterIntelligence()">
                         <option value="">All sessions</option>
                     </select>
-                    <input type="date" id="intel-date-filter" title="Filter by session date" style="padding:7px 10px; border:1px solid var(--sap-gray-border); border-radius:7px; font-size:13px;" onchange="filterIntelligence()">
+                    <input type="date" id="intel-date-from" title="Session date from" placeholder="From" style="padding:7px 10px; border:1px solid var(--sap-gray-border); border-radius:7px; font-size:13px;" onchange="filterIntelligence()">
+                    <input type="date" id="intel-date-to" title="Session date to" placeholder="To" style="padding:7px 10px; border:1px solid var(--sap-gray-border); border-radius:7px; font-size:13px;" onchange="filterIntelligence()">
                     <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--sap-text); cursor:pointer; white-space:nowrap;">
                         <input type="checkbox" id="intel-attended-filter" onchange="filterIntelligence()" style="accent-color:var(--sap-blue); width:15px; height:15px; cursor:pointer;">
                         Attended only
@@ -1007,13 +1008,15 @@
                                 <th onclick="sortIntelBy('organization')" id="ith-organization" style="padding:10px 12px; text-align:left; font-size:11px; font-weight:700; color:var(--sap-text-light); text-transform:uppercase; border-bottom:2px solid var(--sap-gray-border); cursor:pointer; user-select:none; white-space:nowrap;">Company</th>
                                 <th onclick="sortIntelBy('classification')" id="ith-classification" style="padding:10px 12px; text-align:left; font-size:11px; font-weight:700; color:var(--sap-text-light); text-transform:uppercase; border-bottom:2px solid var(--sap-gray-border); cursor:pointer; user-select:none; white-space:nowrap;">Classification</th>
                                 <th onclick="sortIntelBy('session')" id="ith-session" style="padding:10px 12px; text-align:left; font-size:11px; font-weight:700; color:var(--sap-text-light); text-transform:uppercase; border-bottom:2px solid var(--sap-gray-border); cursor:pointer; user-select:none; white-space:nowrap;">Session</th>
+                                <th id="ith-sess-date" style="padding:10px 12px; text-align:left; font-size:11px; font-weight:700; color:var(--sap-text-light); text-transform:uppercase; border-bottom:2px solid var(--sap-gray-border); white-space:nowrap;">Date</th>
                                 <th id="ith-lob" style="padding:10px 12px; text-align:left; font-size:11px; font-weight:700; color:var(--sap-text-light); text-transform:uppercase; border-bottom:2px solid var(--sap-gray-border); white-space:nowrap;">LoB</th>
-                                <th onclick="sortIntelBy('attended')" id="ith-attended" style="padding:10px 12px; text-align:left; font-size:11px; font-weight:700; color:var(--sap-text-light); text-transform:uppercase; border-bottom:2px solid var(--sap-gray-border); cursor:pointer; user-select:none; white-space:nowrap;">Attended / Registered</th>
+                                <th id="ith-attendee" style="padding:10px 12px; text-align:left; font-size:11px; font-weight:700; color:var(--sap-text-light); text-transform:uppercase; border-bottom:2px solid var(--sap-gray-border); white-space:nowrap;">Attendee</th>
+                                <th id="ith-role" style="padding:10px 12px; text-align:left; font-size:11px; font-weight:700; color:var(--sap-text-light); text-transform:uppercase; border-bottom:2px solid var(--sap-gray-border); white-space:nowrap;">Role</th>
+                                <th id="ith-status" style="padding:10px 12px; text-align:left; font-size:11px; font-weight:700; color:var(--sap-text-light); text-transform:uppercase; border-bottom:2px solid var(--sap-gray-border); white-space:nowrap;">Status</th>
                                 <th onclick="sortIntelBy('ae')" id="ith-ae" style="padding:10px 12px; text-align:left; font-size:11px; font-weight:700; color:var(--sap-text-light); text-transform:uppercase; border-bottom:2px solid var(--sap-gray-border); cursor:pointer; user-select:none; white-space:nowrap;">AE / FLSM</th>
                                 <th id="ith-sde" style="padding:10px 12px; text-align:left; font-size:11px; font-weight:700; color:var(--sap-text-light); text-transform:uppercase; border-bottom:2px solid var(--sap-gray-border); white-space:nowrap;">SDE</th>
                                 <th id="ith-sde-mgr" style="padding:10px 12px; text-align:left; font-size:11px; font-weight:700; color:var(--sap-text-light); text-transform:uppercase; border-bottom:2px solid var(--sap-gray-border); white-space:nowrap;">SDE Manager</th>
                                 <th onclick="sortIntelBy('region')" id="ith-region" style="padding:10px 12px; text-align:left; font-size:11px; font-weight:700; color:var(--sap-text-light); text-transform:uppercase; border-bottom:2px solid var(--sap-gray-border); cursor:pointer; user-select:none; white-space:nowrap;">Region</th>
-                                <th style="padding:10px 12px; text-align:left; font-size:11px; font-weight:700; color:var(--sap-text-light); text-transform:uppercase; border-bottom:2px solid var(--sap-gray-border);">Top Contact</th>
                             </tr>
                         </thead>
                         <tbody id="intel-tbody"></tbody>
@@ -6040,8 +6043,10 @@ ${orgRows}
         async function initIntelligencePage() {
             _intelSelectedSessions.clear();
             _intelData = null;
-            const dateFilterEl = document.getElementById('intel-date-filter');
-            if (dateFilterEl) dateFilterEl.value = '';
+            const dfEl = document.getElementById('intel-date-from');
+            const dtEl = document.getElementById('intel-date-to');
+            if (dfEl) dfEl.value = '';
+            if (dtEl) dtEl.value = '';
             ['intel-kpis','intel-charts-row','intel-filter-bar','intel-results','intel-loading'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.style.display = 'none';
@@ -6213,25 +6218,31 @@ ${orgRows}
 
         function filterIntelligence() {
             if (!_intelData) return;
-            const search  = document.getElementById('intel-search')?.value.toLowerCase() || '';
-            const cls     = document.getElementById('intel-class-filter')?.value || '';
-            const ae      = document.getElementById('intel-ae-filter')?.value || '';
-            const region  = document.getElementById('intel-region-filter')?.value || '';
-            const sessFilter    = document.getElementById('intel-session-filter')?.value || '';
-            const dateFilter    = document.getElementById('intel-date-filter')?.value || '';
-            const attendedOnly  = document.getElementById('intel-attended-filter')?.checked || false;
+            const search       = document.getElementById('intel-search')?.value.toLowerCase() || '';
+            const cls          = document.getElementById('intel-class-filter')?.value || '';
+            const ae           = document.getElementById('intel-ae-filter')?.value || '';
+            const region       = document.getElementById('intel-region-filter')?.value || '';
+            const sessFilter   = document.getElementById('intel-session-filter')?.value || '';
+            const dateFrom     = document.getElementById('intel-date-from')?.value || '';
+            const dateTo       = document.getElementById('intel-date-to')?.value || '';
+            const attendedOnly = document.getElementById('intel-attended-filter')?.checked || false;
             const CLR = { potential_lead:'#e53e3e', maturation:'#3182ce', adoption:'#38a169', unknown:'#718096' };
             const LBL = { potential_lead:'Potential Lead', maturation:'Maturation', adoption:'Adoption', unknown:'Unknown' };
 
+            // Filter companies first (removes companies with no matching participants)
             const companies = (_intelData.companies || []).filter(c => {
                 if (search && !c.organization.toLowerCase().includes(search)) return false;
                 if (cls    && c.classification !== cls) return false;
                 if (ae     && (c.ae || c.opp_owner_name) !== ae)  return false;
-                if (region && _intelRegion(c) !== region)       return false;
-                if (sessFilter && !(c.participants||[]).some(p => p.session === sessFilter)) return false;
-                if (dateFilter && !(c.participants||[]).some(p => p.session_date === dateFilter)) return false;
-                if (attendedOnly && !(c.participants||[]).some(p => p.attended && (!sessFilter || p.session === sessFilter) && (!dateFilter || p.session_date === dateFilter))) return false;
-                return true;
+                if (region && _intelRegion(c) !== region)         return false;
+                const pts = (c.participants || []).filter(p => {
+                    if (sessFilter && p.session !== sessFilter) return false;
+                    if (dateFrom   && (p.session_date||'') < dateFrom) return false;
+                    if (dateTo     && (p.session_date||'') > dateTo)   return false;
+                    if (attendedOnly && !p.attended) return false;
+                    return true;
+                });
+                return pts.length > 0;
             });
 
             // Update KPIs to reflect filtered set
@@ -6256,14 +6267,13 @@ ${orgRows}
             }
             empty.style.display = 'none';
 
-            // Sort
+            // Sort companies
             const _classOrder = { potential_lead:0, maturation:1, adoption:2, unknown:3 };
             const _sortKey = c => {
                 switch (_intelSort.col) {
                     case 'organization':    return (c.organization||'').toLowerCase();
                     case 'classification':  return _classOrder[c.classification] ?? 3;
                     case 'session':         return ((c.participants||[])[0]?.session||'').toLowerCase();
-                    case 'attended':        return -((c.participants||[]).filter(p => p.attended).length);
                     case 'ae':              return (c.ae||c.opp_owner_name||'').toLowerCase();
                     case 'region':          return _intelRegion(c).toLowerCase();
                     default:                return 0;
@@ -6274,78 +6284,87 @@ ${orgRows}
                 return ka < kb ? -_intelSort.dir : ka > kb ? _intelSort.dir : 0;
             });
 
-            tbody.innerHTML = companies.map(c => {
+            // ── Flatten: one TR per (company × participant) ──────────────────
+            let orgIdx = -1;
+            let prevOrg = null;
+            const rows = [];
+            companies.forEach(c => {
                 const color = CLR[c.classification] || '#718096';
                 const label = LBL[c.classification] || c.classification;
-                const allPart = (() => {
-                    let pts = c.participants || [];
-                    if (sessFilter)    pts = pts.filter(p => p.session === sessFilter);
-                    if (dateFilter)    pts = pts.filter(p => p.session_date === dateFilter);
-                    if (attendedOnly)  pts = pts.filter(p => p.attended);
-                    return pts;
-                })();
-                const attended = allPart.filter(p => p.attended);
-                const registered = allPart.filter(p => !p.attended);
-                const attRate = allPart.length > 0 ? Math.round(attended.length / allPart.length * 100) : 0;
-                const pRow = (p, clr) => {
-                    const role  = p.role  ? ` <span style="color:#888;">· ${escapeHtml(p.role)}</span>` : '';
-                    const mail  = (p.email && p.name) ? ` <span style="font-size:10px;color:#aaa;">${escapeHtml(p.email)}</span>` : '';
-                    const sess  = p.session ? ` <span style="font-size:10px;color:#b0b0b0;">[${escapeHtml(p.session)}]</span>` : '';
-                    return `<div style="font-size:12px; color:${clr}; padding:1px 0 1px 10px; line-height:1.45;">${escapeHtml(p.name||p.email)}${role}${mail}${sess}</div>`;
-                };
-                const participantsHtml = [
-                    attended.length > 0
-                        ? `<div style="font-size:11px; font-weight:700; color:#38a169; margin-bottom:2px;">&#10003; Attended (${attended.length})</div>`
-                          + attended.map(p => pRow(p, '#2d6a4f')).join('')
-                        : '',
-                    registered.length > 0
-                        ? `<div style="font-size:11px; font-weight:700; color:var(--sap-text-light); margin-top:${attended.length?'6px':'0'}; margin-bottom:2px;">Registered (${registered.length})</div>`
-                          + registered.map(p => pRow(p, 'var(--sap-text-light)')).join('')
-                        : ''
-                ].join('');
-                const attendSummary = `<div style="font-size:11px; font-weight:700; margin-bottom:4px;">${attended.length} / ${allPart.length} <span style="color:var(--sap-text-light); font-weight:400;">(${attRate}% attended)</span></div>` + participantsHtml;
-                // Session column: unique (session, date) pairs from visible participants
-                const sessionsVisible = [...new Map(
-                    allPart.filter(p => p.session).map(p => [p.session, p.session_date||''])
-                ).entries()];
-                const sessionCellHtml = sessionsVisible.length
-                    ? sessionsVisible.map(([s, d]) =>
-                        `<div style="font-size:12px; font-weight:500; line-height:1.4;">${escapeHtml(s)}</div>`
-                        + (d ? `<div style="font-size:11px; color:var(--sap-text-light);">${escapeHtml(d)}</div>` : '')
-                      ).join('')
-                    : '—';
-                // LoB column: unique areas from sessions visible, looked up by title
-                const lobSet = [...new Set(sessionsVisible.map(([s]) => {
-                    const found = sessions.find(ss => ss.title === s);
-                    return found?.area || '';
-                }).filter(Boolean))];
-                const lobCellHtml = lobSet.length ? lobSet.map(a => `<div style="font-size:12px;">${escapeHtml(a)}</div>`).join('') : '—';
-                const topContact = c.top_contacts && c.top_contacts[0]
-                    ? `<div style="font-size:12px; font-weight:500;">${c.top_contacts[0].name}</div><div style="font-size:11px; color:var(--sap-text-light);">${c.top_contacts[0].title||''}</div>`
-                    : '—';
+                const effAE = _getEffectiveAE(c);
+                const isOvr = !c.ae && !c.opp_owner_name && !!effAE;
+                const sdeInfo = getSDEForAE(effAE);
+                const sde    = sdeInfo?.sde || '—';
+                const sdeMgr = sdeInfo?.m   || '—';
+                const region = _intelRegion(c) || '—';
+                const orgQ   = c.organization.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
                 const checked = _intelMarked.has(c.organization) ? 'checked' : '';
-                return `<tr style="border-bottom:1px solid var(--sap-gray-border);">
-                    <td style="padding:10px 12px;"><input type="checkbox" ${checked} onchange="_toggleIntelMark(this,'${c.organization.replace(/'/g,"\\'")}')"></td>
-                    <td style="padding:10px 12px;"><div style="font-size:13px; font-weight:500;">${c.organization}</div><div style="font-size:11px; color:var(--sap-text-light);">${c.country||''}</div></td>
-                    <td style="padding:10px 12px;"><span style="display:inline-block; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:700; color:#fff; background:${color};">${label}</span></td>
-                    <td style="padding:10px 12px; max-width:220px;">${sessionCellHtml}</td>
-                    <td style="padding:10px 12px;">${lobCellHtml}</td>
-                    <td style="padding:10px 12px;">${attendSummary}</td>
-                    ${(()=>{
-                        const _effAE=_getEffectiveAE(c);
-                        const _isOvr=!c.ae&&!c.opp_owner_name&&!!_effAE;
-                        const _orgQ=c.organization.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-                        const _sentHtml=_isAeSent(_effAE)?`<div style="font-size:10px;font-weight:700;color:#38a169;margin-top:3px;">&#10003; Sent ${_isAeSent(_effAE)}</div>`:'';
-                        const _editBtn=`<button onclick="_assignAE('${_orgQ}')" style="font-size:10px;padding:1px 7px;margin-top:4px;border:1px solid #999;border-radius:3px;background:#fff;cursor:pointer;">Edit AE</button>`;
-                        const _assignBtn=`<button onclick="_assignAE('${_orgQ}')" style="font-size:11px;padding:2px 9px;margin-top:4px;border:1px solid #0070f3;border-radius:3px;background:#fff;color:#0070f3;cursor:pointer;display:block;">Assign AE</button>`;
-                        if(_effAE){return `<td style="padding:10px 12px;"><div style="font-size:12px;${_isOvr?'color:#d97706;font-style:italic;':''}">${_effAE}${_isOvr?' <span title="Manual assignment" style="font-size:10px;">&#9998;</span>':''}</div><div style="font-size:11px;color:var(--sap-text-light);">${c.flsm||'—'}</div>${_sentHtml}${_editBtn}</td>`;}
-                        else{return `<td style="padding:10px 12px;"><div style="color:var(--sap-text-light);font-size:11px;font-style:italic;">Not assigned</div>${_assignBtn}</td>`;}
-                    })()}
-                    ${(()=>{const _s=getSDEForAE(_getEffectiveAE(c));const sde=_s?_s.sde:'';const mgr=_s?_s.m:'';return `<td style="padding:10px 12px; font-size:12px;">${sde||'—'}</td><td style="padding:10px 12px; font-size:12px;">${mgr||'—'}</td>`;})()}
-                    <td style="padding:10px 12px; font-size:12px;">${_intelRegion(c)||'—'}</td>
-                    <td style="padding:10px 12px;">${topContact}</td>
-                </tr>`;
-            }).join('');
+
+                // Participants filtered by active filters
+                let pts = (c.participants || []).filter(p => {
+                    if (sessFilter && p.session !== sessFilter) return false;
+                    if (dateFrom   && (p.session_date||'') < dateFrom) return false;
+                    if (dateTo     && (p.session_date||'') > dateTo)   return false;
+                    if (attendedOnly && !p.attended) return false;
+                    return true;
+                });
+
+                if (c.organization !== prevOrg) { orgIdx++; prevOrg = c.organization; }
+                const rowBg = orgIdx % 2 === 0 ? '' : 'background:#f8fafc;';
+
+                // AE cell content
+                let aeCellHtml;
+                const sentHtml = _isAeSent(effAE) ? `<div style="font-size:10px;font-weight:700;color:#38a169;margin-top:2px;">&#10003; Sent ${_isAeSent(effAE)}</div>` : '';
+                if (effAE) {
+                    const editBtn = `<button onclick="_assignAE('${orgQ}')" style="font-size:10px;padding:1px 6px;margin-top:3px;border:1px solid #999;border-radius:3px;background:#fff;cursor:pointer;">Edit</button>`;
+                    aeCellHtml = `<div style="font-size:12px;${isOvr?'color:#d97706;font-style:italic;':''}">${effAE}${isOvr?' <span title="Manual" style="font-size:10px;">&#9998;</span>':''}</div><div style="font-size:11px;color:var(--sap-text-light);">${c.flsm||'—'}</div>${sentHtml}${editBtn}`;
+                } else {
+                    const assignBtn = `<button onclick="_assignAE('${orgQ}')" style="font-size:11px;padding:2px 8px;margin-top:3px;border:1px solid #0070f3;border-radius:3px;background:#fff;color:#0070f3;cursor:pointer;display:block;">Assign AE</button>`;
+                    aeCellHtml = `<div style="color:var(--sap-text-light);font-size:11px;font-style:italic;">Not assigned</div>${assignBtn}`;
+                }
+
+                pts.forEach((p, pi) => {
+                    const lob = sessions.find(ss => ss.title === p.session)?.area || '—';
+                    const statusBadge = p.attended
+                        ? `<span style="font-size:10px;background:#dcfce7;color:#166534;border-radius:3px;padding:2px 7px;font-weight:600;">&#10003; Attended</span>`
+                        : `<span style="font-size:10px;background:#f1f5f9;color:#64748b;border-radius:3px;padding:2px 7px;">Registered</span>`;
+                    // Only render company/classification/AE cells on first participant row
+                    const isFirst = pi === 0;
+                    const cbCell = isFirst
+                        ? `<td style="padding:8px 12px;${rowBg}" rowspan="${pts.length}"><input type="checkbox" ${checked} onchange="_toggleIntelMark(this,'${orgQ}')"></td>`
+                        : '';
+                    const orgCell = isFirst
+                        ? `<td style="padding:8px 12px;${rowBg} border-left:3px solid ${color};" rowspan="${pts.length}"><div style="font-size:13px;font-weight:600;">${escapeHtml(c.organization)}</div><div style="font-size:11px;color:var(--sap-text-light);">${escapeHtml(c.country||'')}</div></td>`
+                        : '';
+                    const clsCell = isFirst
+                        ? `<td style="padding:8px 12px;${rowBg}" rowspan="${pts.length}"><span style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;color:#fff;background:${color};">${label}</span></td>`
+                        : '';
+                    const aeCell = isFirst
+                        ? `<td style="padding:8px 12px;${rowBg}" rowspan="${pts.length}">${aeCellHtml}</td>`
+                        : '';
+                    const sdeCell = isFirst
+                        ? `<td style="padding:8px 12px;${rowBg} font-size:12px;" rowspan="${pts.length}">${escapeHtml(sde)}</td>`
+                        : '';
+                    const sdeMgrCell = isFirst
+                        ? `<td style="padding:8px 12px;${rowBg} font-size:12px;" rowspan="${pts.length}">${escapeHtml(sdeMgr)}</td>`
+                        : '';
+                    const regionCell = isFirst
+                        ? `<td style="padding:8px 12px;${rowBg} font-size:12px;" rowspan="${pts.length}">${escapeHtml(region)}</td>`
+                        : '';
+
+                    rows.push(`<tr style="border-bottom:1px solid var(--sap-gray-border);">
+                        ${cbCell}${orgCell}${clsCell}
+                        <td style="padding:8px 12px;${rowBg} font-size:12px;max-width:220px;">${escapeHtml(p.session||'—')}</td>
+                        <td style="padding:8px 12px;${rowBg} font-size:12px;white-space:nowrap;">${escapeHtml(p.session_date||'—')}</td>
+                        <td style="padding:8px 12px;${rowBg} font-size:12px;">${escapeHtml(lob)}</td>
+                        <td style="padding:8px 12px;${rowBg}"><div style="font-size:12px;font-weight:500;">${escapeHtml(p.name||p.email||'')}</div><div style="font-size:10px;color:var(--sap-text-light);">${p.name?escapeHtml(p.email||''):''}</div></td>
+                        <td style="padding:8px 12px;${rowBg} font-size:12px;color:var(--sap-text-light);">${escapeHtml(p.role||'—')}</td>
+                        <td style="padding:8px 12px;${rowBg}">${statusBadge}</td>
+                        ${aeCell}${sdeCell}${sdeMgrCell}${regionCell}
+                    </tr>`);
+                });
+            });
+            tbody.innerHTML = rows.join('');
         }
 
         function _toggleIntelMark(cb, org) {
@@ -6924,83 +6943,106 @@ ${orgRows}
 
         async function exportLeadsExcel() {
             if (!_intelData || !_intelData.companies) return;
-            const companies = _intelData.companies;
+
+            // Respect active filters — same logic as filterIntelligence
+            const search       = document.getElementById('intel-search')?.value.toLowerCase() || '';
+            const cls          = document.getElementById('intel-class-filter')?.value || '';
+            const aeF          = document.getElementById('intel-ae-filter')?.value || '';
+            const regionF      = document.getElementById('intel-region-filter')?.value || '';
+            const sessFilter   = document.getElementById('intel-session-filter')?.value || '';
+            const dateFrom     = document.getElementById('intel-date-from')?.value || '';
+            const dateTo       = document.getElementById('intel-date-to')?.value || '';
+            const attendedOnly = document.getElementById('intel-attended-filter')?.checked || false;
+            const LBL = { potential_lead:'Potential Lead', maturation:'Maturation', adoption:'Adoption', unknown:'Unknown' };
+
+            const companies = (_intelData.companies || []).filter(c => {
+                if (search && !c.organization.toLowerCase().includes(search)) return false;
+                if (cls    && c.classification !== cls) return false;
+                if (aeF    && (c.ae || c.opp_owner_name) !== aeF) return false;
+                if (regionF && _intelRegion(c) !== regionF) return false;
+                const pts = (c.participants || []).filter(p => {
+                    if (sessFilter && p.session !== sessFilter) return false;
+                    if (dateFrom   && (p.session_date||'') < dateFrom) return false;
+                    if (dateTo     && (p.session_date||'') > dateTo)   return false;
+                    if (attendedOnly && !p.attended) return false;
+                    return true;
+                });
+                return pts.length > 0;
+            });
             if (companies.length === 0) { showToast('No data to export', 'error'); return; }
 
             const wb = new ExcelJS.Workbook();
             wb.creator = 'Spark Meeting';
-            const HDR_FILL = { type:'pattern', pattern:'solid', fgColor:{argb:'FF0070B8'} };
-            const HDR_FONT = { bold:true, color:{argb:'FFFFFFFF'}, size:11, name:'Calibri' };
+            const HDR_FILL   = { type:'pattern', pattern:'solid', fgColor:{argb:'FF0070B8'} };
+            const HDR_FONT   = { bold:true, color:{argb:'FFFFFFFF'}, size:11, name:'Calibri' };
             const HDR_BORDER = { bottom:{style:'medium', color:{argb:'FF005A8E'}} };
-            const CLR = { potential_lead:'FFFDE8E8', maturation:'FFE8F0FD', adoption:'FFE8FDF0', unknown:'FFF5F5F5' };
-            const LBL = { potential_lead:'Potential Lead', maturation:'Maturation', adoption:'Adoption', unknown:'Unknown' };
+            const CLS_CLR    = { potential_lead:'FFFDE8E8', maturation:'FFE8F0FD', adoption:'FFE8FDF0', unknown:'FFF5F5F5' };
 
-            // ── Sheet 1: Companies ────────────────────────────────────────
-            const wsC = wb.addWorksheet('Companies');
-            const CH = ['Organization','Classification','Region','AE','FLSM','Open Opps','Participants','Attendees','Top Contact','Title','Email'];
-            const CW = [35, 18, 20, 28, 28, 12, 14, 12, 30, 26, 34];
-            wsC.columns = CH.map((h,i) => ({header:h, key:h, width:CW[i]}));
-            const ch1 = wsC.getRow(1);
-            ch1.height = 22;
-            CH.forEach((_,i) => { const cell = ch1.getCell(i+1); cell.fill=HDR_FILL; cell.font=HDR_FONT; cell.alignment={vertical:'middle',horizontal:'center'}; cell.border=HDR_BORDER; });
-
-            companies.forEach((c, idx) => {
-                const tc = c.top_contacts && c.top_contacts[0];
-                const pts = c.participants || [];
-                const row = wsC.addRow([
-                    c.organization,
-                    LBL[c.classification] || c.classification,
-                    _intelRegion(c) || '',
-                    c.ae || c.opp_owner_name || '',
-                    c.flsm || '',
-                    c.open_opps || 0,
-                    pts.length,
-                    pts.filter(p => p.attended).length,
-                    tc ? tc.name : '',
-                    tc ? tc.title || '' : '',
-                    tc ? tc.email || '' : '',
-                ]);
-                row.getCell(2).fill = { type:'pattern', pattern:'solid', fgColor:{argb: CLR[c.classification]||'FFFFFFFF'} };
-                row.getCell(2).font = { bold:true };
-                if (idx % 2 === 1) {
-                    row.eachCell({ includeEmpty:true }, (cell, col) => {
-                        if (col !== 2 && (!cell.fill || cell.fill.type === 'none')) {
-                            cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFF7F9FC'} };
-                        }
-                    });
-                }
+            // ── Sheet: Leads (flat — one row per participant × session) ──────
+            const ws = wb.addWorksheet('Leads');
+            const H = ['Company','Country','Classification','Session','Session Date','LoB',
+                       'Attendee Name','Role','Email','Status',
+                       'AE','FLSM','SDE','SDE Manager','Region'];
+            const W = [35,18,18,40,14,20,30,24,36,12,28,28,28,28,20];
+            ws.columns = H.map((h,i) => ({header:h, key:h, width:W[i]}));
+            const hdr = ws.getRow(1);
+            hdr.height = 22;
+            H.forEach((_,i) => {
+                const cell = hdr.getCell(i+1);
+                cell.fill = HDR_FILL; cell.font = HDR_FONT;
+                cell.alignment = {vertical:'middle', horizontal:'center'};
+                cell.border = HDR_BORDER;
             });
-            wsC.views = [{ state:'frozen', ySplit:1 }];
-            wsC.autoFilter = { from:{row:1,column:1}, to:{row:1,column:CH.length} };
 
-            // ── Sheet 2: Participants ─────────────────────────────────────
-            const wsP = wb.addWorksheet('Participants');
-            const PH = ['Organization','Classification','Name','Email','Role','Country','Session','Session Date','Attended'];
-            const PW = [35, 18, 28, 34, 24, 18, 40, 14, 10];
-            wsP.columns = PH.map((h,i) => ({header:h, key:h, width:PW[i]}));
-            const ph1 = wsP.getRow(1);
-            ph1.height = 22;
-            PH.forEach((_,i) => { const cell = ph1.getCell(i+1); cell.fill=HDR_FILL; cell.font=HDR_FONT; cell.alignment={vertical:'middle',horizontal:'center'}; cell.border=HDR_BORDER; });
-
+            let rowIdx = 0;
             companies.forEach(c => {
-                (c.participants || []).forEach(p => {
-                    wsP.addRow([
+                const ae      = _getEffectiveAE(c) || '';
+                const flsm    = c.flsm || '';
+                const sdeInfo = getSDEForAE(ae);
+                const sde     = sdeInfo?.sde || '';
+                const sdeMgr  = sdeInfo?.m   || '';
+                const region  = _intelRegion(c) || '';
+                const clsLabel = LBL[c.classification] || c.classification;
+                const clsFill  = { type:'pattern', pattern:'solid', fgColor:{argb: CLS_CLR[c.classification]||'FFFFFFFF'} };
+                const rowBg    = rowIdx % 2 === 1 ? { type:'pattern', pattern:'solid', fgColor:{argb:'FFF7F9FC'} } : null;
+
+                let pts = (c.participants || []).filter(p => {
+                    if (sessFilter && p.session !== sessFilter) return false;
+                    if (dateFrom   && (p.session_date||'') < dateFrom) return false;
+                    if (dateTo     && (p.session_date||'') > dateTo)   return false;
+                    if (attendedOnly && !p.attended) return false;
+                    return true;
+                });
+
+                pts.forEach(p => {
+                    const lob = sessions.find(ss => ss.title === p.session)?.area || '';
+                    const row = ws.addRow([
                         c.organization,
-                        LBL[c.classification] || c.classification,
-                        p.name || '',
-                        p.email || '',
-                        p.role || '',
-                        p.country || '',
+                        c.country || '',
+                        clsLabel,
                         p.session || '',
                         p.session_date || '',
-                        p.attended ? 'Yes' : 'No',
+                        lob,
+                        p.name || '',
+                        p.role || '',
+                        p.email || '',
+                        p.attended ? 'Attended' : 'Registered',
+                        ae, flsm, sde, sdeMgr, region,
                     ]);
+                    row.getCell(3).fill = clsFill;
+                    row.getCell(3).font = { bold:true };
+                    if (rowBg) {
+                        row.eachCell({ includeEmpty:true }, (cell, col) => {
+                            if (col !== 3) cell.fill = rowBg;
+                        });
+                    }
                 });
+                rowIdx++;
             });
-            wsP.views = [{ state:'frozen', ySplit:1 }];
-            wsP.autoFilter = { from:{row:1,column:1}, to:{row:1,column:PH.length} };
+            ws.views = [{ state:'frozen', ySplit:1 }];
+            ws.autoFilter = { from:{row:1,column:1}, to:{row:1,column:H.length} };
 
-            // ── Download ──────────────────────────────────────────────────
+            // ── Download ─────────────────────────────────────────────────────
             const buffer = await wb.xlsx.writeBuffer();
             const blob = new Blob([buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
             const url = URL.createObjectURL(blob);
