@@ -3141,7 +3141,7 @@
                   </button>` : '';
 
             const outlookBtnHtml = `<button onclick="exportOutlookInvite()" style="width:100%;margin-bottom:16px;padding:8px 0;background:#fff;border:1px solid #107C10;border-radius:5px;color:#107C10;font-size:13px;font-weight:600;cursor:pointer;">
-                    &#128197; Exportar convite Outlook (.ics)
+                    &#9993; Exportar e-mails dos participantes (.txt)
                   </button>`;
 
             document.getElementById('cal-session-modal-body').innerHTML = `
@@ -3274,10 +3274,6 @@
             showToast(`Email gerado para ${s.advisorEmail}`, 'success');
         }
 
-        function escapeIcs(str) {
-            return (str || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
-        }
-
         function exportOutlookInvite() {
             const s = sessions.find(x => x.id === _calModalSessionId);
             if (!s) return;
@@ -3288,59 +3284,22 @@
                 return !rDate || rDate === _calModalDateStr;
             });
 
-            const participantEmails = [...new Set(participants.map(p => p.email).filter(Boolean))];
-            if (s.advisorEmail) participantEmails.unshift(s.advisorEmail);
-            const uniqueEmails = [...new Set(participantEmails)];
+            const emails = [...new Set(participants.map(p => p.email).filter(Boolean))];
 
-            const [year, month, day] = _calModalDateStr.split('-').map(Number);
-            const pad = n => String(n).padStart(2, '0');
-            const dtStart = `${year}${pad(month)}${pad(day)}T090000`;
-            const dtEnd   = `${year}${pad(month)}${pad(day)}T100000`;
+            if (emails.length === 0) {
+                showToast('Nenhum e-mail registrado para esta sessão', 'info');
+                return;
+            }
 
-            const organizerLine = (currentUser && currentUser.email)
-                ? `ORGANIZER;CN="${escapeIcs(currentUser.displayName || currentUser.email)}":mailto:${currentUser.email}`
-                : '';
-
-            const attendeeLines = uniqueEmails.map(e =>
-                `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${e}`
-            ).join('\r\n');
-
-            const description = escapeIcs(
-                `${s.area || ''} · ${s.audience || ''}\nPalestrante: ${s.advisorName || ''}\nRegistrados: ${participants.length}\n\nAjuste o horário antes de enviar.`
-            );
-
-            const icsLines = [
-                'BEGIN:VCALENDAR',
-                'VERSION:2.0',
-                'PRODID:-//Spark Meeting App//SAP//EN',
-                'CALSCALE:GREGORIAN',
-                'METHOD:REQUEST',
-                'BEGIN:VEVENT',
-                `DTSTART:${dtStart}`,
-                `DTEND:${dtEnd}`,
-                `SUMMARY:${escapeIcs(s.title)}`,
-                `DESCRIPTION:${description}`,
-                organizerLine,
-                attendeeLines,
-                'SEQUENCE:0',
-                'STATUS:CONFIRMED',
-                'END:VEVENT',
-                'END:VCALENDAR'
-            ].filter(Boolean).join('\r\n');
-
-            const blob = new Blob([icsLines], { type: 'text/calendar;charset=utf-8' });
+            const content = emails.join('; ');
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `spark-invite-${s.id}-${_calModalDateStr}.ics`;
+            a.download = `spark-emails-${s.id}-${_calModalDateStr}.txt`;
             a.click();
             URL.revokeObjectURL(url);
-
-            const emailCount = uniqueEmails.length;
-            showToast(
-                emailCount > 0 ? `Convite gerado com ${emailCount} convidado(s)` : 'Convite gerado (nenhum e-mail registrado ainda)',
-                emailCount > 0 ? 'success' : 'info'
-            );
+            showToast(`${emails.length} e-mail(s) exportado(s)`, 'success');
         }
 
         function prevMonth() { currentCalendarMonth--; if (currentCalendarMonth<0){currentCalendarMonth=11;currentCalendarYear--;} renderCalendar(); }
