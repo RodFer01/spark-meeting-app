@@ -3136,9 +3136,13 @@
                </div>`;
 
             const emailBtnHtml = s.advisorEmail
-                ? `<button onclick="emailSpeakerFromModal()" style="width:100%;margin-bottom:16px;padding:8px 0;background:#fff;border:1px solid var(--sap-blue);border-radius:5px;color:var(--sap-blue);font-size:13px;font-weight:600;cursor:pointer;">
+                ? `<button onclick="emailSpeakerFromModal()" style="width:100%;margin-bottom:8px;padding:8px 0;background:#fff;border:1px solid var(--sap-blue);border-radius:5px;color:var(--sap-blue);font-size:13px;font-weight:600;cursor:pointer;">
                     &#9993; Email palestrante com lista de registrados
                   </button>` : '';
+
+            const outlookBtnHtml = `<button onclick="exportOutlookInvite()" style="width:100%;margin-bottom:16px;padding:8px 0;background:#fff;border:1px solid #107C10;border-radius:5px;color:#107C10;font-size:13px;font-weight:600;cursor:pointer;">
+                    &#128197; Exportar convite Outlook (.ics)
+                  </button>`;
 
             document.getElementById('cal-session-modal-body').innerHTML = `
                 <div style="margin-bottom:6px;font-size:12px;font-weight:600;color:var(--sap-text-light);text-transform:uppercase;letter-spacing:.5px;">${escapeHtml(s.area||'')}</div>
@@ -3146,6 +3150,7 @@
                 <div style="font-size:13px;color:var(--sap-text-light);margin-bottom:12px;">${dateFmt}</div>
                 ${speakerHtml}
                 ${teamsLinkHtml}
+                ${outlookBtnHtml}
                 ${emailBtnHtml}
                 ${kpiHtml}
                 <div style="max-height:300px;overflow-y:auto;">${participantsHtml}</div>`;
@@ -3267,6 +3272,75 @@
             a.click();
             URL.revokeObjectURL(url);
             showToast(`Email gerado para ${s.advisorEmail}`, 'success');
+        }
+
+        function escapeIcs(str) {
+            return (str || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+        }
+
+        function exportOutlookInvite() {
+            const s = sessions.find(x => x.id === _calModalSessionId);
+            if (!s) return;
+
+            const participants = (_registrations || []).filter(r => {
+                if ((r.session || '').trim() !== (s.title || '').trim()) return false;
+                const rDate = toISODate(r.sessionDate || r.date || '');
+                return !rDate || rDate === _calModalDateStr;
+            });
+
+            const participantEmails = [...new Set(participants.map(p => p.email).filter(Boolean))];
+            if (s.advisorEmail) participantEmails.unshift(s.advisorEmail);
+            const uniqueEmails = [...new Set(participantEmails)];
+
+            const [year, month, day] = _calModalDateStr.split('-').map(Number);
+            const pad = n => String(n).padStart(2, '0');
+            const dtStart = `${year}${pad(month)}${pad(day)}T090000`;
+            const dtEnd   = `${year}${pad(month)}${pad(day)}T100000`;
+
+            const organizerLine = (currentUser && currentUser.email)
+                ? `ORGANIZER;CN="${escapeIcs(currentUser.displayName || currentUser.email)}":mailto:${currentUser.email}`
+                : '';
+
+            const attendeeLines = uniqueEmails.map(e =>
+                `ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${e}`
+            ).join('\r\n');
+
+            const description = escapeIcs(
+                `${s.area || ''} · ${s.audience || ''}\nPalestrante: ${s.advisorName || ''}\nRegistrados: ${participants.length}\n\nAjuste o horário antes de enviar.`
+            );
+
+            const icsLines = [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'PRODID:-//Spark Meeting App//SAP//EN',
+                'CALSCALE:GREGORIAN',
+                'METHOD:REQUEST',
+                'BEGIN:VEVENT',
+                `DTSTART:${dtStart}`,
+                `DTEND:${dtEnd}`,
+                `SUMMARY:${escapeIcs(s.title)}`,
+                `DESCRIPTION:${description}`,
+                organizerLine,
+                attendeeLines,
+                'SEQUENCE:0',
+                'STATUS:CONFIRMED',
+                'END:VEVENT',
+                'END:VCALENDAR'
+            ].filter(Boolean).join('\r\n');
+
+            const blob = new Blob([icsLines], { type: 'text/calendar;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `spark-invite-${s.id}-${_calModalDateStr}.ics`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            const emailCount = uniqueEmails.length;
+            showToast(
+                emailCount > 0 ? `Convite gerado com ${emailCount} convidado(s)` : 'Convite gerado (nenhum e-mail registrado ainda)',
+                emailCount > 0 ? 'success' : 'info'
+            );
         }
 
         function prevMonth() { currentCalendarMonth--; if (currentCalendarMonth<0){currentCalendarMonth=11;currentCalendarYear--;} renderCalendar(); }
