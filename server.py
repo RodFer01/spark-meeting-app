@@ -15,8 +15,14 @@ import jwt as pyjwt
 import uvicorn
 import uuid as _uuid
 
-from hdbcli import dbapi
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 import urllib.request
+from spark_db import _hq, _hx, _hbatch, _hx_txn, _from_hana, _upsert_reg, _upsert_user, _hana_is_dup
 
 
 def _hana_oauth_token(uaa: dict) -> str:
@@ -111,132 +117,6 @@ _ESS_TEMPLATES: dict = {
     "teams_link_pt":   {"container": _PT_CONTAINER, "slot": "body"},
     "teams_link_es":   {"container": _ES_CONTAINER, "slot": "body"},
 }
-
-
-# ── HANA connection + helpers ──────────────────────────────────────────────────
-
-def _hana_conn():
-    # Env vars take priority (user-provided, same pattern as dh-api)
-    hana_host = os.environ.get("HANA_HOST")
-    if hana_host:
-        return dbapi.connect(
-            address=hana_host,
-            port=int(os.environ["HANA_PORT"]),
-            user=os.environ["HANA_USER"],
-            password=os.environ["HANA_PASSWORD"],
-            encrypt=True,
-            sslValidateCertificate=False,
-        )
-    creds_file = Path.home() / ".spark_hana_creds.json"
-    if creds_file.exists():
-        creds = json.loads(creds_file.read_text())
-        return dbapi.connect(address=creds["host"], port=int(creds["port"]),
-                             user=creds["user"], password=creds["password"],
-                             encrypt=True, sslValidateCertificate=False)
-    raise RuntimeError("No HANA credentials found")
-
-
-def _row_to_dict(description, row):
-    cols = [d[0].lower() for d in description]
-    result = {}
-    for col, val in zip(cols, row):
-        if hasattr(val, 'read'):
-            val = val.read()
-        result[col] = val
-    return result
-
-
-async def _hq(sql: str, params: tuple = ()) -> list[dict]:
-    def _run():
-        conn = _hana_conn()
-        try:
-            cur = conn.cursor()
-            cur.execute(sql, params)
-            return [_row_to_dict(cur.description, row) for row in cur.fetchall()]
-        finally:
-            conn.close()
-    return await asyncio.to_thread(_run)
-
-
-def _hana_is_dup(e) -> bool:
-    """True when HANA says the object (table, column, index) already exists — safe to ignore."""
-    s = str(e)
-    sl = s.lower()
-    return (
-        any(code in s for code in ("261", "288", "308", "386"))
-        or any(p in sl for p in ("duplicate", "already exists", "already defined", "existing table"))
-    )
-
-
-async def _hx(sql: str, params: tuple = ()) -> None:
-    def _run():
-        conn = _hana_conn()
-        try:
-            cur = conn.cursor()
-            cur.execute(sql, params)
-            conn.commit()
-        finally:
-            conn.close()
-    await asyncio.to_thread(_run)
-
-
-async def _hbatch(sql: str, param_list: list) -> int:
-    def _run():
-        conn = _hana_conn()
-        try:
-            cur = conn.cursor()
-            n = 0
-            for p in param_list:
-                try:
-                    cur.execute(sql, p)
-                    n += 1
-                except Exception as e:
-                    print(f"[hbatch] WARN: {e}", flush=True)
-            conn.commit()
-            return n
-        finally:
-            conn.close()
-    return await asyncio.to_thread(_run)
-
-
-async def _hx_txn(ops: list[tuple]) -> None:
-    """Run multiple (sql, params) statements atomically — single connection, rollback on error."""
-    def _run():
-        conn = _hana_conn()
-        try:
-            cur = conn.cursor()
-            for sql, params in ops:
-                cur.execute(sql, params)
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
-    await asyncio.to_thread(_run)
-
-
-def _from_hana(row: dict) -> dict:
-    d = json.loads(row.get("data_json") or "{}")
-    d["id"] = row.get("id", d.get("id", ""))
-    return d
-
-
-async def _upsert_reg(doc_id: str, reg: dict) -> None:
-    email    = str(reg.get("email", "") or "").lower()[:256]
-    session  = str(reg.get("session", "") or "")[:1024]
-    attended = bool(reg.get("attended", False))
-    await _hx(
-        "UPSERT SPARK_REGISTRATIONS (id, email, session, attended, data_json) "
-        "VALUES (?, ?, ?, ?, ?) WITH PRIMARY KEY",
-        (doc_id, email, session, attended, json.dumps(reg))
-    )
-
-
-async def _upsert_user(doc_id: str, user: dict) -> None:
-    email = str(user.get("email", "") or "").lower()[:256]
-    await _hx("UPSERT SPARK_USERS (id, email, data_json) VALUES (?, ?, ?) WITH PRIMARY KEY",
-              (doc_id, email, json.dumps(user)))
 
 
 async def _load_templates_from_hana() -> None:
@@ -3358,10 +3238,12 @@ async def import_pipeline(request: Request, file: UploadFile = File(...)):
     _CHUNK = 500
 
     def _flush_chunk(rows: list) -> int:
-        conn = _hana_conn()
+        from spark_db import _new_conn, _adapt_sql, _adapt_params
+        conn = _new_conn()
         try:
             cur = conn.cursor()
-            cur.executemany(upsert_sql, rows)
+            adapted = _adapt_sql(upsert_sql)
+            cur.executemany(adapted, [_adapt_params(r) for r in rows])
             conn.commit()
             return len(rows)
         finally:
