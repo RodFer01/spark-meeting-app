@@ -184,6 +184,7 @@
         .date-chips { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
         .date-chip { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--sap-blue-light); border-radius: 8px; font-size: 12px; color: var(--sap-blue-dark); }
         .date-chip .date-chip-date { font-weight: 600; white-space: nowrap; min-width: 90px; }
+        .date-chip input.date-chip-date { border: 1px solid var(--sap-blue); border-radius: 4px; padding: 2px 5px; background: white; color: var(--sap-blue-dark); font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
         .date-chip .date-chip-link { flex: 1; font-size: 12px; padding: 3px 8px; border: 1px solid var(--sap-gray-border); border-radius: 6px; background: white; font-family: inherit; color: var(--sap-text); min-width: 0; }
         .date-chip .remove-date { cursor: pointer; font-weight: bold; color: var(--sap-error); font-size: 14px; line-height: 1; }
         .empty-state { text-align: center; padding: 60px 20px; color: var(--sap-text-light); }
@@ -2846,7 +2847,7 @@
 
         function addDateChip() { const input = document.getElementById('session-date-input'); if (input.value && !editingDates.some(d => d.date === input.value)) { editingDates.push({date: input.value, meetingLink: '', registrationLink: ''}); editingDates.sort((a,b)=>a.date.localeCompare(b.date)); renderDateChips(); input.value = ''; } }
         function removeDate(i) { editingDates.splice(i,1); renderDateChips(); }
-        function renderDateChips() { document.getElementById('date-chips').innerHTML = editingDates.map((d,i) => { return `<div class="date-chip"><span class="date-chip-date">${fmtDate(d.date)}</span><div style="flex:1;display:flex;flex-direction:column;gap:3px;"><input class="date-chip-link" type="url" placeholder="Meeting link (optional)" value="${escapeHtml(d.meetingLink||'')}" oninput="editingDates[${i}].meetingLink=this.value"><input class="date-chip-link" type="url" placeholder="Registration link (optional)" value="${escapeHtml(d.registrationLink||'')}" oninput="editingDates[${i}].registrationLink=this.value"></div><span class="remove-date" onclick="removeDate(${i})">&#215;</span></div>`; }).join(''); }
+        function renderDateChips() { document.getElementById('date-chips').innerHTML = editingDates.map((d,i) => { return `<div class="date-chip"><input type="date" class="date-chip-date" value="${d.date}" onchange="editingDates[${i}]._origDate=editingDates[${i}]._origDate||editingDates[${i}].date;editingDates[${i}].date=this.value;"><div style="flex:1;display:flex;flex-direction:column;gap:3px;"><input class="date-chip-link" type="url" placeholder="Meeting link (optional)" value="${escapeHtml(d.meetingLink||'')}" oninput="editingDates[${i}].meetingLink=this.value"><input class="date-chip-link" type="url" placeholder="Registration link (optional)" value="${escapeHtml(d.registrationLink||'')}" oninput="editingDates[${i}].registrationLink=this.value"></div><span class="remove-date" onclick="removeDate(${i})">&#215;</span></div>`; }).join(''); }
         function getSelectedRegions() { return [...document.querySelectorAll('.region-check:checked')].map(c => c.value); }
 
         async function saveSession(event) {
@@ -2886,7 +2887,29 @@
                     body: JSON.stringify(updated)
                 });
                 if (res.ok) {
-                    showToast('Session updated successfully!', 'success');
+                    const dateChanges = editingDates.filter(d => d._origDate && d._origDate !== d.date);
+                    let migratedCount = 0;
+                    if (dateChanges.length > 0) {
+                        const origTitle = (existing.title || '').trim();
+                        const toMigrate = [];
+                        for (const change of dateChanges) {
+                            (_registrations || []).filter(r =>
+                                (r.session || '').trim() === origTitle &&
+                                toISODate(r.sessionDate || r.date || '') === change._origDate
+                            ).forEach(r => toMigrate.push({ r, newDate: change.date }));
+                        }
+                        if (toMigrate.length > 0) {
+                            await Promise.all(toMigrate.map(({ r, newDate }) =>
+                                fetch('/api/registrations/' + r.id, {
+                                    method: 'PATCH',
+                                    headers: _apiHeaders({ 'Content-Type': 'application/json' }),
+                                    body: JSON.stringify({ sessionDate: newDate }),
+                                }).then(() => { r.sessionDate = newDate; }).catch(() => {})
+                            ));
+                            migratedCount = toMigrate.length;
+                        }
+                    }
+                    showToast(migratedCount > 0 ? `Session updated · ${migratedCount} registration(s) moved to new date` : 'Session updated successfully!', 'success');
                     logActivity('edit', 'Edited session: ' + title);
                     closeModalDirect();
                     await loadSessionsFromHANA();
