@@ -826,7 +826,7 @@
                             <th id="rth-registered" onclick="setRegSort('registered')" class="sort-active" style="padding:10px 12px; text-align:left; font-weight:600; color:var(--sap-text-light); font-size:11px; text-transform:uppercase; border-bottom:1px solid var(--sap-gray-border); white-space:nowrap; cursor:pointer; user-select:none;">Registered <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="12,4 12,20"/><polyline points="5,13 12,20 19,13"/></svg></th>
                             <th style="padding:10px 12px; text-align:left; font-weight:600; color:var(--sap-text-light); font-size:11px; text-transform:uppercase; border-bottom:1px solid var(--sap-gray-border);">Source</th>
                             <th style="padding:10px 12px; text-align:center; font-weight:600; color:var(--sap-text-light); font-size:11px; text-transform:uppercase; border-bottom:1px solid var(--sap-gray-border);">RSVP</th>
-                            <th style="padding:10px 12px; text-align:center; font-weight:600; color:var(--sap-text-light); font-size:11px; text-transform:uppercase; border-bottom:1px solid var(--sap-gray-border); white-space:nowrap;" title="C=Confirmation J=Rejection R=RSVP T=Teams">Emails</th>
+                            <th style="padding:10px 12px; text-align:center; font-weight:600; color:var(--sap-text-light); font-size:11px; text-transform:uppercase; border-bottom:1px solid var(--sap-gray-border); white-space:nowrap;" title="C=Confirmation J=Rejection R=RSVP T=Teams I=Outlook Invite">Emails</th>
                             <th style="padding:10px 12px; text-align:center; font-weight:600; color:#2B7D2B; font-size:11px; text-transform:uppercase; border-bottom:1px solid var(--sap-gray-border); white-space:nowrap;" title="Registration accepted / rejected">Accepted</th>
                             <th style="padding:10px 12px; text-align:center; font-weight:600; color:var(--sap-text-light); font-size:11px; text-transform:uppercase; border-bottom:1px solid var(--sap-gray-border);">Attended</th>
                             <th class="admin-only" style="display:none; padding:10px 12px; width:36px; border-bottom:1px solid var(--sap-gray-border);"></th>
@@ -3274,7 +3274,7 @@
             showToast(`Email gerado para ${s.advisorEmail}`, 'success');
         }
 
-        function exportOutlookInvite() {
+        async function exportOutlookInvite() {
             const s = sessions.find(x => x.id === _calModalSessionId);
             if (!s) return;
 
@@ -3299,7 +3299,24 @@
             a.download = `spark-emails-${s.id}-${_calModalDateStr}.txt`;
             a.click();
             URL.revokeObjectURL(url);
-            showToast(`${emails.length} e-mail(s) exportado(s)`, 'success');
+
+            // Mark all participants as invite sent
+            const toMark = participants.filter(p => p.id && !p.inviteSent);
+            if (toMark.length > 0) {
+                await Promise.all(toMark.map(p =>
+                    fetch('/api/registrations/' + p.id, {
+                        method: 'PATCH',
+                        headers: _apiHeaders({'Content-Type': 'application/json'}),
+                        body: JSON.stringify({ inviteSent: true }),
+                    }).then(() => {
+                        const reg = _registrations.find(r => r.id === p.id);
+                        if (reg) reg.inviteSent = true;
+                    }).catch(() => {})
+                ));
+                renderRegistrations();
+            }
+
+            showToast(`${emails.length} e-mail(s) exportado(s) · ${toMark.length} marcado(s) como Invite`, 'success');
         }
 
         function prevMonth() { currentCalendarMonth--; if (currentCalendarMonth<0){currentCalendarMonth=11;currentCalendarYear--;} renderCalendar(); }
@@ -4167,7 +4184,7 @@
                         <input type="checkbox" ${chkRsvp} style="width:17px;height:17px;accent-color:var(--sap-blue);cursor:pointer;"
                             onchange="toggleRegField('${id}','rsvp',this)">
                     </td>
-                    <td style="padding:10px 12px; text-align:center; white-space:nowrap;">${['C','J','R','T'].map((l,i)=>{const [f,c]=[['confirmationSent','#2B7D2B'],['rejectionSent','#BB0000'],['rsvpSent','#0070F2'],['teamsLinkSent','#6264A7']][i];const sent=!!r[f];return '<span title="'+(l==='C'?'Confirmation':l==='J'?'Rejection':l==='R'?'RSVP':'Teams')+'" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;font-size:10px;font-weight:700;cursor:default;background:'+(sent?c:'transparent')+';color:'+(sent?'#fff':c)+';border:1.5px solid '+c+';margin-right:2px">'+l+'</span>';}).join('')}</td>
+                    <td style="padding:10px 12px; text-align:center; white-space:nowrap;">${['C','J','R','T','I'].map((l,i)=>{const [f,c]=[['confirmationSent','#2B7D2B'],['rejectionSent','#BB0000'],['rsvpSent','#0070F2'],['teamsLinkSent','#6264A7'],['inviteSent','#107C10']][i];const sent=!!r[f];return '<span title="'+(l==='C'?'Confirmation':l==='J'?'Rejection':l==='R'?'RSVP':l==='T'?'Teams':'Outlook Invite')+'" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:3px;font-size:10px;font-weight:700;cursor:default;background:'+(sent?c:'transparent')+';color:'+(sent?'#fff':c)+';border:1.5px solid '+c+';margin-right:2px">'+l+'</span>';}).join('')}</td>
                     <td style="padding:10px 12px; text-align:center;">
                         <input type="checkbox" ${chkAcc} style="width:17px;height:17px;accent-color:#2B7D2B;cursor:pointer;"
                             title="Mark as accepted"
